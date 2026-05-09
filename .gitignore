@@ -3,6 +3,7 @@ venv/
 
 # Variables de entorno
 .envgit
+.env
 
 # Caché Python
 __pycache__/
