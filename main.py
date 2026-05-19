@@ -2,13 +2,22 @@ from fastapi import FastAPI
 from fastapi.openapi.docs import get_redoc_html
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+from routes import router
+from app.core.cron import iniciar_cron
 
 app = FastAPI(
-    title="Mi API",
-    description="API de prueba con FastAPI",
+    title="FarmaRest",
+    description="API REST para plataforma de ventas farmacéuticas",
     version="1.0.0",
-    redoc_url=None,  # deshabilitar el redoc automático
+    redoc_url=None,
 )
+
+app.include_router(router)
+
+
+@app.on_event("startup")
+def startup():
+    iniciar_cron()
 
 @app.get("/redoc", include_in_schema=False)
 async def redoc_html() -> HTMLResponse:
