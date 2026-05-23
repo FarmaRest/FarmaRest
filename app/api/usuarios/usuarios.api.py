@@ -135,16 +135,22 @@ def registrar_usuario(body: UsuarioIn, db: Session = Depends(get_db)):
 # ─── HU-USR-02: Actualización de usuario ─────────────────────────────────────
 
 @router.put("/{usuario_id}", status_code=status.HTTP_200_OK)
-def actualizar_usuario(usuario_id: str, body: UsuarioUpdate, db: Session = Depends(get_db)):
+def actualizar_usuario(
+    usuario_id: str,
+    body: UsuarioUpdate,
+    db: Session = Depends(get_db),
+    solicitante_id: Optional[str] = None,
+    solicitante_rol: Optional[str] = "cliente",
+):
     """
     Actualiza los datos personales de un usuario.
     Solo se modifican los campos que vengan en el body.
-    Pendiente: conectar JWT para obtener solicitante_id y solicitante_rol reales.
+    Pendiente: reemplazar solicitante_id y solicitante_rol por JWT en HU de autenticación.
     """
     try:
         service = UsuarioService(db)
-        # Sin JWT por ahora — se conecta en HU de autenticación
-        usuario = service.actualizar_usuario(usuario_id, body.model_dump(exclude_none=True), usuario_id, "admin")
+        sid = solicitante_id if solicitante_id else usuario_id
+        usuario = service.actualizar_usuario(usuario_id, body.model_dump(exclude_none=True), sid, solicitante_rol)
         data = {
             "id": str(usuario.id),
             "primer_nombre": usuario.primer_nombre,
@@ -184,16 +190,20 @@ def actualizar_usuario(usuario_id: str, body: UsuarioUpdate, db: Session = Depen
 # ─── HU-USR-02: Eliminación de usuario ───────────────────────────────────────
 
 @router.delete("/{usuario_id}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_usuario(usuario_id: str, db: Session = Depends(get_db)):
+def eliminar_usuario(
+    usuario_id: str,
+    db: Session = Depends(get_db),
+    solicitante_rol: Optional[str] = "cliente",
+):
     """
     Elimina un usuario. Solo lo puede hacer un administrador.
     No se puede eliminar si tiene pedidos asociados.
     Retorna 204 (sin contenido en el body).
+    Pendiente: reemplazar solicitante_rol por JWT en HU de autenticación.
     """
     try:
         service = UsuarioService(db)
-        # Sin JWT por ahora — rol admin hardcodeado hasta HU de autenticación
-        service.eliminar_usuario(usuario_id, "admin")
+        service.eliminar_usuario(usuario_id, solicitante_rol)
         return None
     except PermissionError:
         raise HTTPException(
@@ -264,12 +274,30 @@ def agregar_direccion(usuario_id: str, body: DireccionIn, db: Session = Depends(
 
 
 @router.get("/{usuario_id}/direcciones", status_code=status.HTTP_200_OK)
-def consultar_direcciones(usuario_id: str, db: Session = Depends(get_db)):
-    """Retorna todas las direcciones de entrega registradas del usuario."""
+def consultar_direcciones(
+    usuario_id: str,
+    db: Session = Depends(get_db),
+    solicitante_id: Optional[str] = None,
+    solicitante_rol: Optional[str] = "cliente",
+):
+    """
+    Retorna todas las direcciones de entrega registradas del usuario.
+    Un cliente solo puede consultar sus propias direcciones; un admin puede consultar cualquiera.
+    Pendiente: reemplazar solicitante_id y solicitante_rol por JWT en HU de autenticación.
+    """
     try:
+        sid = solicitante_id if solicitante_id else usuario_id
+        if solicitante_rol == "cliente" and sid != usuario_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=_formato_error(403, "Acceso denegado", "FORBIDDEN",
+                                      "No tiene permisos para consultar las direcciones de otro usuario")
+            )
         service = DireccionService(db)
         dirs = service.consultar(usuario_id)
         return _formato_respuesta(200, "Direcciones obtenidas correctamente", [_dir_dict(d) for d in dirs])
+    except HTTPException:
+        raise
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=_formato_error(404, "Usuario no encontrado", "USER_NOT_FOUND",
@@ -321,16 +349,21 @@ class EstadoUpdate(BaseModel):
 
 
 @router.patch("/{usuario_id}/estado", status_code=status.HTTP_200_OK)
-def actualizar_estado(usuario_id: str, body: EstadoUpdate, db: Session = Depends(get_db)):
+def actualizar_estado(
+    usuario_id: str,
+    body: EstadoUpdate,
+    db: Session = Depends(get_db),
+    solicitante_rol: Optional[str] = "cliente",
+):
     """
     Cambia el estado de un usuario entre activo e inactivo.
     Solo puede hacerlo un administrador.
     Se usa para reactivar cuentas inactivadas por el cron job.
+    Pendiente: reemplazar solicitante_rol por JWT en HU de autenticación.
     """
     try:
         service = UsuarioService(db)
-        # Sin JWT por ahora — rol admin hardcodeado hasta HU de autenticación
-        usuario = service.actualizar_estado(usuario_id, body.estado, "admin")
+        usuario = service.actualizar_estado(usuario_id, body.estado, solicitante_rol)
         return _formato_respuesta(200, "Estado del usuario actualizado correctamente", {
             "id": str(usuario.id),
             "primer_nombre": usuario.primer_nombre,
@@ -406,16 +439,21 @@ def cambiar_correo(usuario_id: str, body: CorreoUpdate, db: Session = Depends(ge
 # ─── HU-USR-01: Consulta de usuario ──────────────────────────────────────────
 
 @router.get("/{usuario_id}", status_code=status.HTTP_200_OK)
-def consultar_usuario(usuario_id: str, db: Session = Depends(get_db)):
+def consultar_usuario(
+    usuario_id: str,
+    db: Session = Depends(get_db),
+    solicitante_id: Optional[str] = None,
+    solicitante_rol: Optional[str] = "cliente",
+):
     """
     Retorna el perfil completo del usuario incluyendo sus direcciones.
     La contraseña nunca aparece en la respuesta.
-    Pendiente: conectar JWT para validar permisos por rol.
+    Pendiente: reemplazar solicitante_id y solicitante_rol por JWT en HU de autenticación.
     """
     try:
         service = UsuarioService(db)
-        # Sin JWT por ahora — rol admin hardcodeado hasta HU de autenticación
-        usuario = service.consultar_por_id(usuario_id, usuario_id, "admin")
+        sid = solicitante_id if solicitante_id else usuario_id
+        usuario = service.consultar_por_id(usuario_id, sid, solicitante_rol)
         data = {
             "id": str(usuario.id),
             "primer_nombre": usuario.primer_nombre,
@@ -441,6 +479,12 @@ def consultar_usuario(usuario_id: str, db: Session = Depends(get_db)):
             ],
         }
         return _formato_respuesta(200, "Usuario encontrado", data)
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_formato_error(403, "Acceso denegado", "FORBIDDEN",
+                                  "No tiene permisos para consultar el perfil de otro usuario")
+        )
     except LookupError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
