@@ -1,0 +1,1511 @@
+<html lang="es"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FastAPI — Arquitectura de Capas</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=DM+Sans:wght@300;400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1e1e2e;
+    --bg2: #181825;
+    --bg3: #11111b;
+    --surface: #242436;
+    --surface2: #2a2a3e;
+    --border: #313150;
+    --text: #cdd6f4;
+    --muted: #7f849c;
+    --green: #a6e3a1;
+    --green-d: #1e3a2f;
+    --blue: #89b4fa;
+    --blue-d: #1e2a4a;
+    --yellow: #f9e2af;
+    --yellow-d: #3a2e1a;
+    --red: #f38ba8;
+    --red-d: #3a1a22;
+    --purple: #cba6f7;
+    --purple-d: #2a1a4a;
+    --teal: #94e2d5;
+    --teal-d: #1a3a38;
+    --orange: #fab387;
+    --sidebar-w: 260px;
+    --header-h: 56px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg3);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ---- HEADER ---- */
+  .header {
+    height: var(--header-h);
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+    flex-shrink: 0;
+    z-index: 100;
+  }
+  .header-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--green);
+  }
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #a6e3a1, #94e2d5);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+  .header-subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    margin-left: 4px;
+  }
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .badge {
+    background: var(--green-d);
+    color: var(--green);
+    border: 1px solid var(--green);
+    border-opacity: 0.3;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ---- LAYOUT ---- */
+  .workspace {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ---- SIDEBAR ---- */
+  .sidebar {
+    width: var(--sidebar-w);
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+  .sidebar-section {
+    padding: 12px 0 6px;
+  }
+  .sidebar-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 0 16px 6px;
+  }
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 0;
+    transition: background 0.15s;
+    font-size: 13px;
+    color: var(--muted);
+    border-left: 2px solid transparent;
+    user-select: none;
+  }
+  .sidebar-item:hover { background: var(--surface); color: var(--text); }
+  .sidebar-item.active {
+    background: var(--surface);
+    color: var(--text);
+    border-left-color: var(--green);
+  }
+  .sidebar-item.active .item-icon { opacity: 1; }
+  .item-icon {
+    font-size: 15px;
+    width: 20px;
+    text-align: center;
+    opacity: 0.7;
+  }
+  .item-name { flex: 1; font-weight: 400; }
+  .item-layer {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 1px 6px;
+    border-radius: 4px;
+    opacity: 0.8;
+  }
+  .layer-api    { background: var(--blue-d);   color: var(--blue);   }
+  .layer-svc    { background: var(--purple-d); color: var(--purple); }
+  .layer-dom    { background: var(--yellow-d); color: var(--yellow); }
+  .layer-rep    { background: var(--teal-d);   color: var(--teal);   }
+  .layer-run    { background: var(--green-d);  color: var(--green);  }
+
+  .progress-bar-wrap {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+  }
+  .progress-label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .progress-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  /* ---- MAIN CONTENT ---- */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* Tab bar */
+  .tab-bar {
+    height: 38px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: stretch;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s;
+  }
+  .tab.active {
+    background: var(--bg);
+    color: var(--text);
+    border-bottom-color: var(--green);
+  }
+  .tab .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* Content area */
+  .content-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  /* Panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ---- STEP CARD ---- */
+  .step-wrapper {
+    padding: 32px 40px;
+    max-width: 900px;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .step-num {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .step-meta h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .step-meta p {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* Layer badge */
+  .layer-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+    font-weight: 500;
+  }
+
+  /* Concept box */
+  .concept-box {
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    border-left: 3px solid;
+  }
+  .concept-box.info    { background: var(--blue-d);   border-color: var(--blue);   color: var(--blue);   }
+  .concept-box.success { background: var(--green-d);  border-color: var(--green);  color: var(--green);  }
+  .concept-box.warn    { background: var(--yellow-d); border-color: var(--yellow); color: var(--yellow); }
+  .concept-box.tip     { background: var(--teal-d);   border-color: var(--teal);   color: var(--teal);   }
+  .concept-box.purple  { background: var(--purple-d); border-color: var(--purple); color: var(--purple); }
+  .concept-box-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .concept-box p, .concept-box ul {
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .concept-box ul { padding-left: 18px; }
+  .concept-box li { margin-bottom: 4px; }
+
+  /* Section title */
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin: 28px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ---- CODE BLOCK (estilo VSCode) ---- */
+  .code-file {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin-bottom: 24px;
+    background: var(--bg3);
+  }
+  .code-file-header {
+    background: var(--bg2);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .code-dots { display: flex; gap: 6px; }
+  .code-dots span {
+    width: 12px; height: 12px; border-radius: 50%;
+  }
+  .dot-r { background: #f38ba8; }
+  .dot-y { background: #f9e2af; }
+  .dot-g { background: #a6e3a1; }
+  .code-filename {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    flex: 1;
+  }
+  .code-lang {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    opacity: 0.6;
+  }
+
+  .code-body {
+    display: flex;
+    overflow-x: auto;
+  }
+  .line-nums {
+    background: var(--bg3);
+    padding: 16px 0;
+    min-width: 44px;
+    text-align: right;
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .line-nums span {
+    display: block;
+    padding: 0 12px 0 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #3d4060;
+  }
+  .code-content {
+    padding: 16px 20px;
+    overflow-x: auto;
+    flex: 1;
+  }
+  .code-content pre {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    white-space: pre;
+    tab-size: 4;
+  }
+
+  /* Syntax tokens */
+  .kw  { color: #cba6f7; }   /* keyword */
+  .fn  { color: #89b4fa; }   /* function / decorator */
+  .st  { color: #a6e3a1; }   /* string */
+  .cm  { color: #45475a; font-style: italic; } /* comment */
+  .ty  { color: #f9e2af; }   /* type */
+  .op  { color: #89dceb; }   /* operator / paren */
+  .nm  { color: #fab387; }   /* number */
+  .cl  { color: #94e2d5; }   /* class name */
+  .at  { color: #cba6f7; }   /* attribute / self */
+  .va  { color: #cdd6f4; }   /* variable */
+  .dc  { color: #a6e3a1; }   /* decorator @ */
+
+  /* Annotation lines */
+  .ann-block {
+    margin: -4px 0 20px;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    padding: 0;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .ann-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .ann-row:last-child { border-bottom: none; }
+  .ann-line {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 28px;
+    padding-top: 1px;
+    flex-shrink: 0;
+  }
+  .ann-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .ann-text { color: var(--text); }
+  .ann-text strong { color: var(--yellow); font-weight: 500; }
+  .ann-text code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--orange);
+  }
+
+  /* Nav buttons */
+  .nav-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 32px;
+    padding-bottom: 40px;
+  }
+  .btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: var(--green); color: #0f1f14; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+
+  /* Architecture overview */
+  .arch-diagram {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 20px 0 28px;
+    max-width: 560px;
+  }
+  .arch-layer {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+  .arch-layer:hover { filter: brightness(1.1); }
+  .arch-layer-icon { font-size: 20px; }
+  .arch-layer-info { flex: 1; }
+  .arch-layer-name { font-weight: 500; font-size: 15px; margin-bottom: 2px; }
+  .arch-layer-desc { font-size: 12px; opacity: 0.8; }
+  .arch-arrow {
+    text-align: center;
+    color: var(--muted);
+    font-size: 18px;
+    padding: 2px 0;
+  }
+  .arch-file {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    opacity: 0.7;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .la { background: var(--blue-d); border-color: #89b4fa33; color: var(--blue); }
+  .ls { background: var(--purple-d); border-color: #cba6f733; color: var(--purple); }
+  .ld { background: var(--yellow-d); border-color: #f9e2af33; color: var(--yellow); }
+  .lr { background: var(--teal-d); border-color: #94e2d533; color: var(--teal); }
+
+  /* Terminal */
+  .terminal {
+    background: #0d0d14;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .terminal-header {
+    background: var(--bg2);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .terminal-body {
+    padding: 16px 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .t-prompt { color: var(--green); }
+  .t-cmd { color: var(--text); }
+  .t-out { color: var(--muted); }
+  .t-success { color: var(--green); }
+  .t-url { color: var(--blue); text-decoration: underline; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-logo">
+    <div class="logo-icon">⚡</div>
+    FastAPI — Arquitectura de Capas
+  </div>
+  <span class="header-subtitle">/  API REST paso a paso</span>
+  <div class="header-right">
+    <span class="badge">Python 3.11+</span>
+    <span class="badge">FastAPI 0.111</span>
+  </div>
+</div>
+
+<div class="workspace">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Proyecto</div>
+      <div class="sidebar-item active" onclick="goTo(0)">
+        <span class="item-icon">🗺️</span>
+        <span class="item-name">Visión general</span>
+      </div>
+      <div class="sidebar-item" onclick="goTo(1)">
+        <span class="item-icon">📦</span>
+        <span class="item-name">Setup del proyecto</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Capas</div>
+
+      <div class="sidebar-item" onclick="goTo(2)">
+        <span class="item-icon">🟡</span>
+        <span class="item-name">domain/</span>
+        <span class="item-layer layer-dom">domain</span>
+      </div>
+      <div class="sidebar-item" onclick="goTo(3)">
+        <span class="item-icon">🟢</span>
+        <span class="item-name">repository/</span>
+        <span class="item-layer layer-rep">repo</span>
+      </div>
+      <div class="sidebar-item" onclick="goTo(4)">
+        <span class="item-icon">🟣</span>
+        <span class="item-name">service/</span>
+        <span class="item-layer layer-svc">service</span>
+      </div>
+      <div class="sidebar-item" onclick="goTo(5)">
+        <span class="item-icon">🔵</span>
+        <span class="item-name">api/</span>
+        <span class="item-layer layer-api">api</span>
+      </div>
+      <div class="sidebar-item" onclick="goTo(6)">
+        <span class="item-icon">🚀</span>
+        <span class="item-name">main.py</span>
+        <span class="item-layer layer-run">run</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Resultado</div>
+      <div class="sidebar-item" onclick="goTo(7)">
+        <span class="item-icon">🧪</span>
+        <span class="item-name">Prueba tu API</span>
+      </div>
+    </div>
+
+    <div class="progress-bar-wrap">
+      <div class="progress-label">
+        <span>Progreso</span>
+        <span id="prog-pct">1 / 8</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="prog-fill" style="width: 13%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- TAB BAR -->
+    <div class="tab-bar" id="tab-bar">
+      <div class="tab active" onclick="goTo(0)"><span class="dot" style="background:var(--green)"></span>overview</div>
+      <div class="tab" onclick="goTo(1)"><span class="dot" style="background:var(--muted)"></span>setup.sh</div>
+      <div class="tab" onclick="goTo(2)"><span class="dot" style="background:var(--yellow)"></span>models.py</div>
+      <div class="tab" onclick="goTo(3)"><span class="dot" style="background:var(--teal)"></span>repository.py</div>
+      <div class="tab" onclick="goTo(4)"><span class="dot" style="background:var(--purple)"></span>service.py</div>
+      <div class="tab" onclick="goTo(5)"><span class="dot" style="background:var(--blue)"></span>router.py</div>
+      <div class="tab" onclick="goTo(6)"><span class="dot" style="background:var(--green)"></span>main.py</div>
+      <div class="tab" onclick="goTo(7)"><span class="dot" style="background:var(--orange)"></span>test.http</div>
+    </div>
+
+    <div class="content-area">
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- PANEL 0 — VISIÓN GENERAL -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="panel active" id="panel-0">
+        <div class="step-wrapper">
+          <div class="step-header">
+            <div class="step-num" style="background:var(--green-d);color:var(--green)">🗺️</div>
+            <div class="step-meta">
+              <h1>¿Qué vamos a construir?</h1>
+              <p>Una API REST de <strong>Productos</strong> con FastAPI, organizada en capas. Cada capa tiene una responsabilidad clara y separada.</p>
+            </div>
+          </div>
+
+          <div class="concept-box info">
+            <div class="concept-box-title">💡 ¿Qué es la arquitectura de capas?</div>
+            <p>Es una forma de organizar el código en <strong>grupos con responsabilidades únicas</strong>. Cada capa solo habla con la capa inmediata de abajo. Esto hace el código más fácil de entender, probar y mantener.</p>
+          </div>
+
+          <div class="section-title">Flujo de una petición HTTP</div>
+
+          <div class="arch-diagram">
+            <div class="arch-layer la" onclick="goTo(5)">
+              <span class="arch-layer-icon">🌐</span>
+              <div class="arch-layer-info">
+                <div class="arch-layer-name">API Layer</div>
+                <div class="arch-layer-desc">Recibe peticiones HTTP. Define los endpoints.</div>
+              </div>
+              <span class="arch-file">api/router.py</span>
+            </div>
+            <div class="arch-arrow">↓</div>
+            <div class="arch-layer ls" onclick="goTo(4)">
+              <span class="arch-layer-icon">⚙️</span>
+              <div class="arch-layer-info">
+                <div class="arch-layer-name">Service Layer</div>
+                <div class="arch-layer-desc">Contiene la lógica de negocio.</div>
+              </div>
+              <span class="arch-file">service/product_service.py</span>
+            </div>
+            <div class="arch-arrow">↓</div>
+            <div class="arch-layer lr" onclick="goTo(3)">
+              <span class="arch-layer-icon">🗄️</span>
+              <div class="arch-layer-info">
+                <div class="arch-layer-name">Repository Layer</div>
+                <div class="arch-layer-desc">Acceso a datos. Habla con la "base de datos".</div>
+              </div>
+              <span class="arch-file">repository/product_repo.py</span>
+            </div>
+            <div class="arch-arrow">↓</div>
+            <div class="arch-layer ld" onclick="goTo(2)">
+              <span class="arch-layer-icon">📐</span>
+              <div class="arch-layer-info">
+                <div class="arch-layer-name">Domain Layer</div>
+                <div class="arch-layer-desc">Define los modelos y esquemas de datos.</div>
+              </div>
+              <span class="arch-file">domain/models.py</span>
+            </div>
+          </div>
+
+          <div class="concept-box tip">
+            <div class="concept-box-title">🎯 Caso de uso: Productos</div>
+            <ul>
+              <li>Listar todos los productos</li>
+              <li>Obtener un producto por ID</li>
+              <li>Crear un nuevo producto</li>
+              <li>Eliminar un producto</li>
+            </ul>
+          </div>
+
+          <div class="concept-box warn">
+            <div class="concept-box-title">📁 Estructura de archivos que crearás</div>
+            <p style="font-family:'JetBrains Mono',monospace; font-size:13px; line-height:2;">
+              mi_api/<br>
+              &nbsp;&nbsp;├── domain/<br>
+              &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── models.py<br>
+              &nbsp;&nbsp;├── repository/<br>
+              &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── product_repo.py<br>
+              &nbsp;&nbsp;├── service/<br>
+              &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── product_service.py<br>
+              &nbsp;&nbsp;├── api/<br>
+              &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── router.py<br>
+              &nbsp;&nbsp;└── main.py
+            </p>
+          </div>
+
+          <div class="nav-row">
+            <button class="btn btn-primary" onclick="goTo(1)">Comenzar →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- PANEL 1 — SETUP -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="panel" id="panel-1">
+        <div class="step-wrapper">
+          <div class="step-header">
+            <div class="step-num" style="background:var(--green-d);color:var(--green)">01</div>
+            <div class="step-meta">
+              <h1>Setup del proyecto</h1>
+              <p>Instala las dependencias y crea la estructura de carpetas antes de escribir código.</p>
+            </div>
+          </div>
+
+          <div class="section-title">Terminal — Instalación</div>
+
+          <div class="terminal">
+            <div class="terminal-header">
+              <span>●</span> Terminal
+            </div>
+            <div class="terminal-body">
+              <div><span class="t-prompt">$ </span><span class="t-cmd">mkdir mi_api &amp;&amp; cd mi_api</span></div>
+              <div><span class="t-out"># Crear entorno virtual</span></div>
+              <div><span class="t-prompt">$ </span><span class="t-cmd">python -m venv venv</span></div>
+              <div><span class="t-prompt">$ </span><span class="t-cmd">source venv/bin/activate</span> &nbsp;<span class="t-out"># Mac/Linux</span></div>
+              <div><span class="t-prompt">$ </span><span class="t-cmd">venv\Scripts\activate</span> &nbsp;<span class="t-out"># Windows</span></div>
+              <div><br></div>
+              <div><span class="t-out"># Instalar FastAPI y Uvicorn (servidor ASGI)</span></div>
+              <div><span class="t-prompt">$ </span><span class="t-cmd">pip install fastapi uvicorn</span></div>
+              <div><br></div>
+              <div><span class="t-out"># Crear la estructura de carpetas</span></div>
+              <div><span class="t-prompt">$ </span><span class="t-cmd">mkdir domain repository service api</span></div>
+              <div><span class="t-prompt">$ </span><span class="t-cmd">touch main.py domain/models.py repository/product_repo.py service/product_service.py api/router.py</span></div>
+              <div><br></div>
+              <div><span class="t-success">✓ Estructura lista. ¡A programar!</span></div>
+            </div>
+          </div>
+
+          <div class="concept-box info">
+            <div class="concept-box-title">🔍 ¿Qué instalamos?</div>
+            <ul>
+              <li><strong>fastapi</strong> — El framework web. Usa Python type hints para validar datos automáticamente.</li>
+              <li><strong>uvicorn</strong> — El servidor que corre tu aplicación FastAPI (protocolo ASGI, asíncrono).</li>
+            </ul>
+          </div>
+
+          <div class="nav-row">
+            <button class="btn btn-secondary" onclick="goTo(0)">← Atrás</button>
+            <button class="btn btn-primary" onclick="goTo(2)">Siguiente: Domain →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- PANEL 2 — DOMAIN -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="panel" id="panel-2">
+        <div class="step-wrapper">
+          <div class="step-header">
+            <div class="step-num" style="background:var(--yellow-d);color:var(--yellow)">02</div>
+            <div class="step-meta">
+              <h1>Domain Layer — Los Modelos</h1>
+              <p>Define <strong>cómo lucen tus datos</strong>. Es la capa más fundamental: todas las demás la usan.</p>
+            </div>
+          </div>
+
+          <span class="layer-badge" style="background:var(--yellow-d);color:var(--yellow)">📐 domain/models.py</span>
+
+          <div class="concept-box warn">
+            <div class="concept-box-title">🤔 ¿Para qué sirve esta capa?</div>
+            <p>Define la <strong>forma y las reglas</strong> de tus datos. Usa <code>Pydantic</code> (incluido en FastAPI) para validar automáticamente que los datos sean correctos antes de procesarlos.</p>
+          </div>
+
+          <div class="section-title">Archivo: domain/models.py</div>
+
+          <div class="code-file">
+            <div class="code-file-header">
+              <div class="code-dots"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+              <span class="code-filename">📁 domain / models.py</span>
+              <span class="code-lang">Python</span>
+            </div>
+            <div class="code-body">
+              <div class="line-nums">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+                <span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+                <span>11</span><span>12</span><span>13</span><span>14</span><span>15</span>
+                <span>16</span><span>17</span><span>18</span><span>19</span><span>20</span>
+                <span>21</span><span>22</span><span>23</span><span>24</span><span>25</span>
+              </div>
+              <div class="code-content"><pre><span class="kw">from</span> <span class="va">pydantic</span> <span class="kw">import</span> <span class="cl">BaseModel</span>
+<span class="kw">from</span> <span class="va">typing</span> <span class="kw">import</span> <span class="cl">Optional</span>
+
+
+<span class="cm"># ── Modelo base: campos comunes ──────────────────</span>
+<span class="kw">class</span> <span class="cl">ProductBase</span><span class="op">(</span><span class="cl">BaseModel</span><span class="op">)</span><span class="op">:</span>
+    <span class="va">name</span><span class="op">:</span> <span class="ty">str</span>
+    <span class="va">description</span><span class="op">:</span> <span class="ty">str</span>
+    <span class="va">price</span><span class="op">:</span> <span class="ty">float</span>
+    <span class="va">stock</span><span class="op">:</span> <span class="ty">int</span>
+
+
+<span class="cm"># ── Para CREAR un producto (sin ID) ─────────────</span>
+<span class="kw">class</span> <span class="cl">ProductCreate</span><span class="op">(</span><span class="cl">ProductBase</span><span class="op">)</span><span class="op">:</span>
+    <span class="kw">pass</span>
+
+
+<span class="cm"># ── Respuesta completa (con ID) ──────────────────</span>
+<span class="kw">class</span> <span class="cl">Product</span><span class="op">(</span><span class="cl">ProductBase</span><span class="op">)</span><span class="op">:</span>
+    <span class="va">id</span><span class="op">:</span> <span class="ty">int</span>
+
+    <span class="kw">class</span> <span class="cl">Config</span><span class="op">:</span>
+        <span class="cm"># Permite leer datos desde atributos de objeto</span>
+        <span class="va">from_attributes</span> <span class="op">=</span> <span class="kw">True</span>
+</pre></div>
+            </div>
+          </div>
+
+          <div class="ann-block">
+            <div class="ann-row">
+              <span class="ann-line">L1</span>
+              <span class="ann-icon">📦</span>
+              <div class="ann-text">Importamos <code>BaseModel</code> de Pydantic. Toda clase que herede de BaseModel <strong>valida automáticamente</strong> los datos que recibe.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L6–10</span>
+              <span class="ann-icon">🧱</span>
+              <div class="ann-text"><code>ProductBase</code> define los <strong>campos comunes</strong>. Cada campo tiene su tipo de Python: <code>str</code>, <code>float</code>, <code>int</code>. Pydantic valida que vengan correctos.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L13–14</span>
+              <span class="ann-icon">📥</span>
+              <div class="ann-text"><code>ProductCreate</code> hereda todo de Base. Se usa cuando el <strong>cliente envía datos</strong> para crear un producto — sin ID, porque el sistema lo genera.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L17–23</span>
+              <span class="ann-icon">📤</span>
+              <div class="ann-text"><code>Product</code> agrega el campo <code>id</code>. Es el modelo que <strong>devuelve la API</strong> al cliente como respuesta. <code>Config.from_attributes = True</code> permite convertir objetos de base de datos a este modelo.</div>
+            </div>
+          </div>
+
+          <div class="concept-box success">
+            <div class="concept-box-title">✅ Regla de esta capa</div>
+            <p>Solo define estructuras de datos. <strong>No tiene lógica, no accede a la base de datos</strong>. Es el vocabulario que hablan todas las capas.</p>
+          </div>
+
+          <div class="nav-row">
+            <button class="btn btn-secondary" onclick="goTo(1)">← Atrás</button>
+            <button class="btn btn-primary" onclick="goTo(3)">Siguiente: Repository →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- PANEL 3 — REPOSITORY -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="panel" id="panel-3">
+        <div class="step-wrapper">
+          <div class="step-header">
+            <div class="step-num" style="background:var(--teal-d);color:var(--teal)">03</div>
+            <div class="step-meta">
+              <h1>Repository Layer — Acceso a datos</h1>
+              <p>Esta capa es la única que <strong>sabe cómo guardar y leer datos</strong>. Si mañana cambias de base de datos, solo tocas esta capa.</p>
+            </div>
+          </div>
+
+          <span class="layer-badge" style="background:var(--teal-d);color:var(--teal)">🗄️ repository/product_repo.py</span>
+
+          <div class="concept-box tip">
+            <div class="concept-box-title">💡 Patrón Repository</div>
+            <p>Esconde <strong>cómo</strong> se guardan los datos. El Service no sabe si los datos vienen de PostgreSQL, MongoDB, un archivo JSON, o como en este caso, de un diccionario en memoria. Eso es encapsulamiento.</p>
+          </div>
+
+          <div class="section-title">Archivo: repository/product_repo.py</div>
+
+          <div class="code-file">
+            <div class="code-file-header">
+              <div class="code-dots"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+              <span class="code-filename">📁 repository / product_repo.py</span>
+              <span class="code-lang">Python</span>
+            </div>
+            <div class="code-body">
+              <div class="line-nums">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+                <span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+                <span>11</span><span>12</span><span>13</span><span>14</span><span>15</span>
+                <span>16</span><span>17</span><span>18</span><span>19</span><span>20</span>
+                <span>21</span><span>22</span><span>23</span><span>24</span><span>25</span>
+                <span>26</span><span>27</span><span>28</span><span>29</span><span>30</span>
+                <span>31</span><span>32</span><span>33</span><span>34</span><span>35</span>
+                <span>36</span><span>37</span><span>38</span><span>39</span><span>40</span>
+              </div>
+              <div class="code-content"><pre><span class="kw">from</span> <span class="va">typing</span> <span class="kw">import</span> <span class="cl">Optional</span><span class="op">,</span> <span class="cl">List</span>
+<span class="kw">from</span> <span class="va">domain.models</span> <span class="kw">import</span> <span class="cl">Product</span><span class="op">,</span> <span class="cl">ProductCreate</span>
+
+
+<span class="kw">class</span> <span class="cl">ProductRepository</span><span class="op">:</span>
+    <span class="cm">"""Simulamos una base de datos con un dict."""</span>
+
+    <span class="kw">def</span> <span class="fn">__init__</span><span class="op">(</span><span class="at">self</span><span class="op">)</span><span class="op">:</span>
+        <span class="cm"># "Base de datos" en memoria</span>
+        <span class="at">self</span><span class="op">.</span><span class="va">_db</span><span class="op">:</span> <span class="ty">dict</span><span class="op">[</span><span class="ty">int</span><span class="op">,</span> <span class="cl">Product</span><span class="op">]</span> <span class="op">=</span> <span class="op">{}</span>
+        <span class="at">self</span><span class="op">.</span><span class="va">_next_id</span><span class="op">:</span> <span class="ty">int</span> <span class="op">=</span> <span class="nm">1</span>
+
+    <span class="kw">def</span> <span class="fn">get_all</span><span class="op">(</span><span class="at">self</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="cl">List</span><span class="op">[</span><span class="cl">Product</span><span class="op">]</span><span class="op">:</span>
+        <span class="cm"># Devuelve todos los productos</span>
+        <span class="kw">return</span> <span class="fn">list</span><span class="op">(</span><span class="at">self</span><span class="op">.</span><span class="va">_db</span><span class="op">.</span><span class="fn">values</span><span class="op">())</span>
+
+    <span class="kw">def</span> <span class="fn">get_by_id</span><span class="op">(</span><span class="at">self</span><span class="op">,</span> <span class="va">product_id</span><span class="op">:</span> <span class="ty">int</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="cl">Optional</span><span class="op">[</span><span class="cl">Product</span><span class="op">]</span><span class="op">:</span>
+        <span class="cm"># Busca por ID. None si no existe</span>
+        <span class="kw">return</span> <span class="at">self</span><span class="op">.</span><span class="va">_db</span><span class="op">.</span><span class="fn">get</span><span class="op">(</span><span class="va">product_id</span><span class="op">)</span>
+
+    <span class="kw">def</span> <span class="fn">create</span><span class="op">(</span><span class="at">self</span><span class="op">,</span> <span class="va">data</span><span class="op">:</span> <span class="cl">ProductCreate</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="cl">Product</span><span class="op">:</span>
+        <span class="cm"># Asigna ID, guarda y retorna el producto</span>
+        <span class="va">product</span> <span class="op">=</span> <span class="cl">Product</span><span class="op">(</span>
+            <span class="va">id</span><span class="op">=</span><span class="at">self</span><span class="op">.</span><span class="va">_next_id</span><span class="op">,</span>
+            <span class="op">**</span><span class="va">data</span><span class="op">.</span><span class="fn">model_dump</span><span class="op">()</span>
+        <span class="op">)</span>
+        <span class="at">self</span><span class="op">.</span><span class="va">_db</span><span class="op">[</span><span class="at">self</span><span class="op">.</span><span class="va">_next_id</span><span class="op">]</span> <span class="op">=</span> <span class="va">product</span>
+        <span class="at">self</span><span class="op">.</span><span class="va">_next_id</span> <span class="op">+=</span> <span class="nm">1</span>
+        <span class="kw">return</span> <span class="va">product</span>
+
+    <span class="kw">def</span> <span class="fn">delete</span><span class="op">(</span><span class="at">self</span><span class="op">,</span> <span class="va">product_id</span><span class="op">:</span> <span class="ty">int</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="ty">bool</span><span class="op">:</span>
+        <span class="cm"># True si existía y se borró</span>
+        <span class="kw">if</span> <span class="va">product_id</span> <span class="kw">in</span> <span class="at">self</span><span class="op">.</span><span class="va">_db</span><span class="op">:</span>
+            <span class="kw">del</span> <span class="at">self</span><span class="op">.</span><span class="va">_db</span><span class="op">[</span><span class="va">product_id</span><span class="op">]</span>
+            <span class="kw">return</span> <span class="kw">True</span>
+        <span class="kw">return</span> <span class="kw">False</span>
+</pre></div>
+            </div>
+          </div>
+
+          <div class="ann-block">
+            <div class="ann-row">
+              <span class="ann-line">L2</span>
+              <span class="ann-icon">🔗</span>
+              <div class="ann-text">Importa los modelos del <strong>Domain Layer</strong>. El Repository usa esos modelos para hablar con el resto del sistema.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L8–11</span>
+              <span class="ann-icon">🗃️</span>
+              <div class="ann-text"><code>self._db</code> es un diccionario que actúa como base de datos. La clave es el <code>id</code> y el valor es el objeto <code>Product</code>. En un proyecto real, aquí iría SQLAlchemy o un ORM.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L13–15</span>
+              <span class="ann-icon">📋</span>
+              <div class="ann-text"><code>get_all()</code> devuelve todos los valores del diccionario como lista. <code>List[Product]</code> en el type hint le dice a Python (y a FastAPI) qué tipo de dato esperar.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L22–28</span>
+              <span class="ann-icon">✏️</span>
+              <div class="ann-text"><code>data.model_dump()</code> convierte el objeto Pydantic a un <code>dict</code>. El <code>**</code> lo "desempaca" como argumentos con nombre. Es la forma estándar de crear un modelo desde otro.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L30–35</span>
+              <span class="ann-icon">🗑️</span>
+              <div class="ann-text"><code>delete()</code> retorna <code>True</code> o <code>False</code> para indicar si la operación tuvo éxito. El Service usa ese resultado para decidir qué responder al cliente.</div>
+            </div>
+          </div>
+
+          <div class="nav-row">
+            <button class="btn btn-secondary" onclick="goTo(2)">← Atrás</button>
+            <button class="btn btn-primary" onclick="goTo(4)">Siguiente: Service →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- PANEL 4 — SERVICE -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="panel" id="panel-4">
+        <div class="step-wrapper">
+          <div class="step-header">
+            <div class="step-num" style="background:var(--purple-d);color:var(--purple)">04</div>
+            <div class="step-meta">
+              <h1>Service Layer — La lógica de negocio</h1>
+              <p>Aquí vive <strong>el cerebro de tu aplicación</strong>. Orquesta operaciones, aplica reglas de negocio y decide qué puede o no puede hacerse.</p>
+            </div>
+          </div>
+
+          <span class="layer-badge" style="background:var(--purple-d);color:var(--purple)">⚙️ service/product_service.py</span>
+
+          <div class="concept-box purple">
+            <div class="concept-box-title">🧠 ¿Qué va aquí?</div>
+            <ul>
+              <li>Validaciones de negocio (ej: el precio no puede ser negativo)</li>
+              <li>Reglas (ej: no se puede crear un producto sin stock)</li>
+              <li>Orquestación (llama al Repository para leer/escribir datos)</li>
+              <li>Manejo de errores específicos del negocio</li>
+            </ul>
+          </div>
+
+          <div class="section-title">Archivo: service/product_service.py</div>
+
+          <div class="code-file">
+            <div class="code-file-header">
+              <div class="code-dots"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+              <span class="code-filename">📁 service / product_service.py</span>
+              <span class="code-lang">Python</span>
+            </div>
+            <div class="code-body">
+              <div class="line-nums">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+                <span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+                <span>11</span><span>12</span><span>13</span><span>14</span><span>15</span>
+                <span>16</span><span>17</span><span>18</span><span>19</span><span>20</span>
+                <span>21</span><span>22</span><span>23</span><span>24</span><span>25</span>
+                <span>26</span><span>27</span><span>28</span><span>29</span><span>30</span>
+                <span>31</span><span>32</span><span>33</span><span>34</span><span>35</span>
+                <span>36</span><span>37</span><span>38</span><span>39</span><span>40</span>
+                <span>41</span><span>42</span><span>43</span><span>44</span><span>45</span>
+              </div>
+              <div class="code-content"><pre><span class="kw">from</span> <span class="va">typing</span> <span class="kw">import</span> <span class="cl">List</span>
+<span class="kw">from</span> <span class="va">fastapi</span> <span class="kw">import</span> <span class="cl">HTTPException</span><span class="op">,</span> <span class="va">status</span>
+
+<span class="kw">from</span> <span class="va">domain.models</span> <span class="kw">import</span> <span class="cl">Product</span><span class="op">,</span> <span class="cl">ProductCreate</span>
+<span class="kw">from</span> <span class="va">repository.product_repo</span> <span class="kw">import</span> <span class="cl">ProductRepository</span>
+
+
+<span class="kw">class</span> <span class="cl">ProductService</span><span class="op">:</span>
+
+    <span class="kw">def</span> <span class="fn">__init__</span><span class="op">(</span><span class="at">self</span><span class="op">,</span> <span class="va">repo</span><span class="op">:</span> <span class="cl">ProductRepository</span><span class="op">)</span><span class="op">:</span>
+        <span class="cm"># Recibe el repositorio por inyección de dependencias</span>
+        <span class="at">self</span><span class="op">.</span><span class="va">repo</span> <span class="op">=</span> <span class="va">repo</span>
+
+    <span class="kw">def</span> <span class="fn">get_all_products</span><span class="op">(</span><span class="at">self</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="cl">List</span><span class="op">[</span><span class="cl">Product</span><span class="op">]</span><span class="op">:</span>
+        <span class="kw">return</span> <span class="at">self</span><span class="op">.</span><span class="va">repo</span><span class="op">.</span><span class="fn">get_all</span><span class="op">()</span>
+
+    <span class="kw">def</span> <span class="fn">get_product</span><span class="op">(</span><span class="at">self</span><span class="op">,</span> <span class="va">product_id</span><span class="op">:</span> <span class="ty">int</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="cl">Product</span><span class="op">:</span>
+        <span class="va">product</span> <span class="op">=</span> <span class="at">self</span><span class="op">.</span><span class="va">repo</span><span class="op">.</span><span class="fn">get_by_id</span><span class="op">(</span><span class="va">product_id</span><span class="op">)</span>
+
+        <span class="cm"># ⬇ Regla de negocio: si no existe, lanza error 404</span>
+        <span class="kw">if not</span> <span class="va">product</span><span class="op">:</span>
+            <span class="kw">raise</span> <span class="cl">HTTPException</span><span class="op">(</span>
+                <span class="va">status_code</span><span class="op">=</span><span class="va">status</span><span class="op">.</span><span class="va">HTTP_404_NOT_FOUND</span><span class="op">,</span>
+                <span class="va">detail</span><span class="op">=</span><span class="st">f"Producto </span><span class="op">{</span><span class="va">product_id</span><span class="op">}</span><span class="st"> no encontrado"</span>
+            <span class="op">)</span>
+        <span class="kw">return</span> <span class="va">product</span>
+
+    <span class="kw">def</span> <span class="fn">create_product</span><span class="op">(</span><span class="at">self</span><span class="op">,</span> <span class="va">data</span><span class="op">:</span> <span class="cl">ProductCreate</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="cl">Product</span><span class="op">:</span>
+        <span class="cm"># ⬇ Regla de negocio: precio no puede ser negativo</span>
+        <span class="kw">if</span> <span class="va">data</span><span class="op">.</span><span class="va">price</span> <span class="op">&lt;</span> <span class="nm">0</span><span class="op">:</span>
+            <span class="kw">raise</span> <span class="cl">HTTPException</span><span class="op">(</span>
+                <span class="va">status_code</span><span class="op">=</span><span class="va">status</span><span class="op">.</span><span class="va">HTTP_400_BAD_REQUEST</span><span class="op">,</span>
+                <span class="va">detail</span><span class="op">=</span><span class="st">"El precio no puede ser negativo"</span>
+            <span class="op">)</span>
+        <span class="kw">return</span> <span class="at">self</span><span class="op">.</span><span class="va">repo</span><span class="op">.</span><span class="fn">create</span><span class="op">(</span><span class="va">data</span><span class="op">)</span>
+
+    <span class="kw">def</span> <span class="fn">delete_product</span><span class="op">(</span><span class="at">self</span><span class="op">,</span> <span class="va">product_id</span><span class="op">:</span> <span class="ty">int</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="ty">dict</span><span class="op">:</span>
+        <span class="va">deleted</span> <span class="op">=</span> <span class="at">self</span><span class="op">.</span><span class="va">repo</span><span class="op">.</span><span class="fn">delete</span><span class="op">(</span><span class="va">product_id</span><span class="op">)</span>
+        <span class="kw">if not</span> <span class="va">deleted</span><span class="op">:</span>
+            <span class="kw">raise</span> <span class="cl">HTTPException</span><span class="op">(</span>
+                <span class="va">status_code</span><span class="op">=</span><span class="va">status</span><span class="op">.</span><span class="va">HTTP_404_NOT_FOUND</span><span class="op">,</span>
+                <span class="va">detail</span><span class="op">=</span><span class="st">f"Producto </span><span class="op">{</span><span class="va">product_id</span><span class="op">}</span><span class="st"> no encontrado"</span>
+            <span class="op">)</span>
+        <span class="kw">return</span> <span class="op">{</span><span class="st">"message"</span><span class="op">:</span> <span class="st">"Producto eliminado correctamente"</span><span class="op">}</span>
+</pre></div>
+            </div>
+          </div>
+
+          <div class="ann-block">
+            <div class="ann-row">
+              <span class="ann-line">L2</span>
+              <span class="ann-icon">🚨</span>
+              <div class="ann-text"><code>HTTPException</code> es la forma estándar de FastAPI para lanzar errores HTTP con un código de estado (404, 400, etc.) y un mensaje claro para el cliente.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L10–12</span>
+              <span class="ann-icon">💉</span>
+              <div class="ann-text">El <code>__init__</code> recibe el repositorio como parámetro. Esto se llama <strong>Inyección de Dependencias</strong>. El Service no crea el repositorio, solo lo usa. Facilita testear con repositorios falsos.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L21–25</span>
+              <span class="ann-icon">🔴</span>
+              <div class="ann-text">Si el producto no existe, lanzamos <strong>HTTP 404</strong>. FastAPI convierte automáticamente esta excepción en una respuesta JSON con el código y el mensaje de error.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L29–33</span>
+              <span class="ann-icon">📏</span>
+              <div class="ann-text">Aquí está la <strong>lógica de negocio real</strong>: validar que el precio sea positivo antes de guardar. El Repository no sabe de estas reglas — ese es el trabajo del Service.</div>
+            </div>
+          </div>
+
+          <div class="nav-row">
+            <button class="btn btn-secondary" onclick="goTo(3)">← Atrás</button>
+            <button class="btn btn-primary" onclick="goTo(5)">Siguiente: API →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- PANEL 5 — API -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="panel" id="panel-5">
+        <div class="step-wrapper">
+          <div class="step-header">
+            <div class="step-num" style="background:var(--blue-d);color:var(--blue)">05</div>
+            <div class="step-meta">
+              <h1>API Layer — Los Endpoints</h1>
+              <p>La "puerta de entrada" de tu API. Recibe las peticiones HTTP, llama al Service y devuelve la respuesta.</p>
+            </div>
+          </div>
+
+          <span class="layer-badge" style="background:var(--blue-d);color:var(--blue)">🌐 api/router.py</span>
+
+          <div class="concept-box info">
+            <div class="concept-box-title">🌐 ¿Qué hace esta capa?</div>
+            <ul>
+              <li>Define las rutas: <code>GET /products</code>, <code>POST /products</code>, etc.</li>
+              <li>Extrae los datos de la petición (body, path params, query params)</li>
+              <li>Delega el trabajo al Service (no tiene lógica propia)</li>
+              <li>Define el código HTTP de respuesta correcto</li>
+            </ul>
+          </div>
+
+          <div class="section-title">Archivo: api/router.py</div>
+
+          <div class="code-file">
+            <div class="code-file-header">
+              <div class="code-dots"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+              <span class="code-filename">📁 api / router.py</span>
+              <span class="code-lang">Python</span>
+            </div>
+            <div class="code-body">
+              <div class="line-nums">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+                <span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+                <span>11</span><span>12</span><span>13</span><span>14</span><span>15</span>
+                <span>16</span><span>17</span><span>18</span><span>19</span><span>20</span>
+                <span>21</span><span>22</span><span>23</span><span>24</span><span>25</span>
+                <span>26</span><span>27</span><span>28</span><span>29</span><span>30</span>
+                <span>31</span><span>32</span><span>33</span><span>34</span><span>35</span>
+                <span>36</span><span>37</span><span>38</span><span>39</span><span>40</span>
+                <span>41</span><span>42</span><span>43</span><span>44</span><span>45</span>
+                <span>46</span><span>47</span><span>48</span><span>49</span><span>50</span>
+              </div>
+              <div class="code-content"><pre><span class="kw">from</span> <span class="va">typing</span> <span class="kw">import</span> <span class="cl">List</span>
+<span class="kw">from</span> <span class="va">fastapi</span> <span class="kw">import</span> <span class="cl">APIRouter</span><span class="op">,</span> <span class="va">status</span>
+
+<span class="kw">from</span> <span class="va">domain.models</span> <span class="kw">import</span> <span class="cl">Product</span><span class="op">,</span> <span class="cl">ProductCreate</span>
+<span class="kw">from</span> <span class="va">service.product_service</span> <span class="kw">import</span> <span class="cl">ProductService</span>
+<span class="kw">from</span> <span class="va">repository.product_repo</span> <span class="kw">import</span> <span class="cl">ProductRepository</span>
+
+
+<span class="cm"># Instancias (en producción usarías DI de FastAPI)</span>
+<span class="va">repo</span> <span class="op">=</span> <span class="cl">ProductRepository</span><span class="op">()</span>
+<span class="va">service</span> <span class="op">=</span> <span class="cl">ProductService</span><span class="op">(</span><span class="va">repo</span><span class="op">)</span>
+
+<span class="cm"># Router: agrupa endpoints bajo un prefijo</span>
+<span class="va">router</span> <span class="op">=</span> <span class="cl">APIRouter</span><span class="op">(</span><span class="va">prefix</span><span class="op">=</span><span class="st">"/products"</span><span class="op">,</span> <span class="va">tags</span><span class="op">=</span><span class="op">[</span><span class="st">"products"</span><span class="op">]</span><span class="op">)</span>
+
+
+<span class="dc">@</span><span class="fn">router.get</span><span class="op">(</span><span class="st">"/"</span><span class="op">,</span> <span class="va">response_model</span><span class="op">=</span><span class="cl">List</span><span class="op">[</span><span class="cl">Product</span><span class="op">]</span><span class="op">)</span>
+<span class="kw">def</span> <span class="fn">list_products</span><span class="op">()</span><span class="op">:</span>
+    <span class="cm">"""Devuelve todos los productos."""</span>
+    <span class="kw">return</span> <span class="va">service</span><span class="op">.</span><span class="fn">get_all_products</span><span class="op">()</span>
+
+
+<span class="dc">@</span><span class="fn">router.get</span><span class="op">(</span><span class="st">"/{product_id}"</span><span class="op">,</span> <span class="va">response_model</span><span class="op">=</span><span class="cl">Product</span><span class="op">)</span>
+<span class="kw">def</span> <span class="fn">get_product</span><span class="op">(</span><span class="va">product_id</span><span class="op">:</span> <span class="ty">int</span><span class="op">)</span><span class="op">:</span>
+    <span class="cm">"""Devuelve un producto por su ID."""</span>
+    <span class="kw">return</span> <span class="va">service</span><span class="op">.</span><span class="fn">get_product</span><span class="op">(</span><span class="va">product_id</span><span class="op">)</span>
+
+
+<span class="dc">@</span><span class="fn">router.post</span><span class="op">(</span>
+    <span class="st">"/"</span><span class="op">,</span>
+    <span class="va">response_model</span><span class="op">=</span><span class="cl">Product</span><span class="op">,</span>
+    <span class="va">status_code</span><span class="op">=</span><span class="va">status</span><span class="op">.</span><span class="va">HTTP_201_CREATED</span>
+<span class="op">)</span>
+<span class="kw">def</span> <span class="fn">create_product</span><span class="op">(</span><span class="va">data</span><span class="op">:</span> <span class="cl">ProductCreate</span><span class="op">)</span><span class="op">:</span>
+    <span class="cm">"""Crea un nuevo producto."""</span>
+    <span class="kw">return</span> <span class="va">service</span><span class="op">.</span><span class="fn">create_product</span><span class="op">(</span><span class="va">data</span><span class="op">)</span>
+
+
+<span class="dc">@</span><span class="fn">router.delete</span><span class="op">(</span>
+    <span class="st">"/{product_id}"</span><span class="op">,</span>
+    <span class="va">status_code</span><span class="op">=</span><span class="va">status</span><span class="op">.</span><span class="va">HTTP_200_OK</span>
+<span class="op">)</span>
+<span class="kw">def</span> <span class="fn">delete_product</span><span class="op">(</span><span class="va">product_id</span><span class="op">:</span> <span class="ty">int</span><span class="op">)</span><span class="op">:</span>
+    <span class="cm">"""Elimina un producto por su ID."""</span>
+    <span class="kw">return</span> <span class="va">service</span><span class="op">.</span><span class="fn">delete_product</span><span class="op">(</span><span class="va">product_id</span><span class="op">)</span>
+</pre></div>
+            </div>
+          </div>
+
+          <div class="ann-block">
+            <div class="ann-row">
+              <span class="ann-line">L13</span>
+              <span class="ann-icon">🗂️</span>
+              <div class="ann-text"><code>APIRouter</code> agrupa endpoints. El <code>prefix="/products"</code> hace que todos los endpoints comiencen con <code>/products</code>. El <code>tags</code> organiza la documentación automática de Swagger.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L16</span>
+              <span class="ann-icon">🎯</span>
+              <div class="ann-text"><code>@router.get("/")</code> es un <strong>decorador</strong>. Le dice a FastAPI que cuando llegue una petición <code>GET</code> a <code>/products/</code>, ejecute la función de abajo. <code>response_model</code> define cómo se serializa la respuesta.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L23</span>
+              <span class="ann-icon">🔍</span>
+              <div class="ann-text"><code>{product_id}</code> en la ruta es un <strong>path parameter</strong>. FastAPI lo extrae de la URL y lo pasa como argumento a la función — automáticamente convertido a <code>int</code>.</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L29–35</span>
+              <span class="ann-icon">📮</span>
+              <div class="ann-text"><code>status_code=HTTP_201_CREATED</code> devuelve 201 en vez de 200 al crear. El parámetro <code>data: ProductCreate</code> indica a FastAPI que espere un <strong>JSON body</strong> y lo valide automáticamente.</div>
+            </div>
+          </div>
+
+          <div class="nav-row">
+            <button class="btn btn-secondary" onclick="goTo(4)">← Atrás</button>
+            <button class="btn btn-primary" onclick="goTo(6)">Siguiente: main.py →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- PANEL 6 — MAIN -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="panel" id="panel-6">
+        <div class="step-wrapper">
+          <div class="step-header">
+            <div class="step-num" style="background:var(--green-d);color:var(--green)">06</div>
+            <div class="step-meta">
+              <h1>main.py — El punto de entrada</h1>
+              <p>Aquí se ensambla toda la aplicación. Crea la instancia de FastAPI y registra los routers.</p>
+            </div>
+          </div>
+
+          <span class="layer-badge" style="background:var(--green-d);color:var(--green)">🚀 main.py</span>
+
+          <div class="section-title">Archivo: main.py</div>
+
+          <div class="code-file">
+            <div class="code-file-header">
+              <div class="code-dots"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+              <span class="code-filename">📄 main.py</span>
+              <span class="code-lang">Python</span>
+            </div>
+            <div class="code-body">
+              <div class="line-nums">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+                <span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+                <span>11</span><span>12</span><span>13</span><span>14</span><span>15</span>
+                <span>16</span><span>17</span><span>18</span><span>19</span><span>20</span>
+              </div>
+              <div class="code-content"><pre><span class="kw">from</span> <span class="va">fastapi</span> <span class="kw">import</span> <span class="cl">FastAPI</span>
+<span class="kw">from</span> <span class="va">api.router</span> <span class="kw">import</span> <span class="va">router</span>
+
+
+<span class="cm"># Crea la aplicación FastAPI</span>
+<span class="va">app</span> <span class="op">=</span> <span class="cl">FastAPI</span><span class="op">(</span>
+    <span class="va">title</span><span class="op">=</span><span class="st">"Mi API de Productos"</span><span class="op">,</span>
+    <span class="va">description</span><span class="op">=</span><span class="st">"API REST con arquitectura de capas"</span><span class="op">,</span>
+    <span class="va">version</span><span class="op">=</span><span class="st">"1.0.0"</span>
+<span class="op">)</span>
+
+<span class="cm"># Registra el router de productos</span>
+<span class="va">app</span><span class="op">.</span><span class="fn">include_router</span><span class="op">(</span><span class="va">router</span><span class="op">)</span>
+
+
+<span class="cm"># Endpoint raíz de bienvenida</span>
+<span class="dc">@</span><span class="fn">app.get</span><span class="op">(</span><span class="st">"/"</span><span class="op">)</span>
+<span class="kw">def</span> <span class="fn">root</span><span class="op">()</span><span class="op">:</span>
+    <span class="kw">return</span> <span class="op">{</span><span class="st">"message"</span><span class="op">:</span> <span class="st">"¡API funcionando! 🚀"</span><span class="op">}</span>
+</pre></div>
+            </div>
+          </div>
+
+          <div class="ann-block">
+            <div class="ann-row">
+              <span class="ann-line">L5–9</span>
+              <span class="ann-icon">🏗️</span>
+              <div class="ann-text"><code>FastAPI(...)</code> crea la aplicación. Los parámetros <code>title</code>, <code>description</code> y <code>version</code> aparecen automáticamente en la <strong>documentación interactiva</strong> (Swagger UI).</div>
+            </div>
+            <div class="ann-row">
+              <span class="ann-line">L12</span>
+              <span class="ann-icon">🔌</span>
+              <div class="ann-text"><code>include_router(router)</code> conecta todos los endpoints definidos en <code>api/router.py</code> a la aplicación. Si tuvieras más recursos (usuarios, pedidos) solo agregarías más routers aquí.</div>
+            </div>
+          </div>
+
+          <div class="section-title">Ejecutar el servidor</div>
+
+          <div class="terminal">
+            <div class="terminal-header">
+              <span>●</span> Terminal — Ejecutar
+            </div>
+            <div class="terminal-body">
+              <div><span class="t-prompt">$ </span><span class="t-cmd">uvicorn main:app --reload</span></div>
+              <div><br></div>
+              <div><span class="t-out">INFO:     Uvicorn running on</span> <span class="t-url">http://127.0.0.1:8000</span></div>
+              <div><span class="t-out">INFO:     Application startup complete.</span></div>
+              <div><br></div>
+              <div><span class="t-success">✓ Documentación interactiva en:</span></div>
+              <div><span class="t-url">  http://127.0.0.1:8000/docs</span> &nbsp;<span class="t-out">← Swagger UI</span></div>
+              <div><span class="t-url">  http://127.0.0.1:8000/redoc</span> &nbsp;<span class="t-out">← ReDoc</span></div>
+            </div>
+          </div>
+
+          <div class="concept-box success">
+            <div class="concept-box-title">🎉 ¿Qué hace <code>--reload</code>?</div>
+            <p>Le dice a Uvicorn que reinicie automáticamente el servidor cada vez que guardes un archivo. Ideal para desarrollo. En producción NO se usa.</p>
+          </div>
+
+          <div class="concept-box info">
+            <div class="concept-box-title">📖 <code>main:app</code> ¿qué significa?</div>
+            <p><code>main</code> es el nombre del archivo Python (<code>main.py</code>) y <code>app</code> es la variable dentro de ese archivo donde creaste la instancia de FastAPI. Uvicorn necesita saber ambas cosas.</p>
+          </div>
+
+          <div class="nav-row">
+            <button class="btn btn-secondary" onclick="goTo(5)">← Atrás</button>
+            <button class="btn btn-primary" onclick="goTo(7)">Siguiente: Probar API →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- PANEL 7 — TEST -->
+      <!-- ══════════════════════════════════════════ -->
+      <div class="panel" id="panel-7">
+        <div class="step-wrapper">
+          <div class="step-header">
+            <div class="step-num" style="background:#3a2e1a;color:var(--orange)">🧪</div>
+            <div class="step-meta">
+              <h1>¡Prueba tu API!</h1>
+              <p>Con el servidor corriendo, prueba cada endpoint con estos comandos. Puedes usar curl, Postman, Insomnia o la misma Swagger UI.</p>
+            </div>
+          </div>
+
+          <div class="concept-box success">
+            <div class="concept-box-title">✅ Endpoints disponibles</div>
+            <ul>
+              <li><code>GET  /</code> — Mensaje de bienvenida</li>
+              <li><code>GET  /products/</code> — Listar todos</li>
+              <li><code>GET  /products/{id}</code> — Obtener uno</li>
+              <li><code>POST /products/</code> — Crear</li>
+              <li><code>DELETE /products/{id}</code> — Eliminar</li>
+            </ul>
+          </div>
+
+          <div class="section-title">Pruebas con curl</div>
+
+          <div class="terminal">
+            <div class="terminal-header"><span>●</span> Terminal — Crear un producto</div>
+            <div class="terminal-body">
+              <div><span class="t-prompt">$ </span><span class="t-cmd">curl -X POST http://localhost:8000/products/ \</span></div>
+              <div>&nbsp;&nbsp;<span class="t-cmd">-H "Content-Type: application/json" \</span></div>
+              <div>&nbsp;&nbsp;<span class="t-cmd">-d '{"name":"Laptop","description":"Gaming","price":1500.0,"stock":10}'</span></div>
+              <div><br></div>
+              <div><span class="t-out"># Respuesta esperada (HTTP 201):</span></div>
+              <div><span class="t-success">{"id":1,"name":"Laptop","description":"Gaming","price":1500.0,"stock":10}</span></div>
+            </div>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal-header"><span>●</span> Terminal — Listar productos</div>
+            <div class="terminal-body">
+              <div><span class="t-prompt">$ </span><span class="t-cmd">curl http://localhost:8000/products/</span></div>
+              <div><br></div>
+              <div><span class="t-success">[{"id":1,"name":"Laptop","description":"Gaming","price":1500.0,"stock":10}]</span></div>
+            </div>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal-header"><span>●</span> Terminal — Obtener por ID</div>
+            <div class="terminal-body">
+              <div><span class="t-prompt">$ </span><span class="t-cmd">curl http://localhost:8000/products/1</span></div>
+              <div><br></div>
+              <div><span class="t-success">{"id":1,"name":"Laptop","description":"Gaming","price":1500.0,"stock":10}</span></div>
+              <div><br></div>
+              <div><span class="t-out"># Si el ID no existe (HTTP 404):</span></div>
+              <div><span class="t-out">{"detail":"Producto 99 no encontrado"}</span></div>
+            </div>
+          </div>
+
+          <div class="terminal">
+            <div class="terminal-header"><span>●</span> Terminal — Eliminar</div>
+            <div class="terminal-body">
+              <div><span class="t-prompt">$ </span><span class="t-cmd">curl -X DELETE http://localhost:8000/products/1</span></div>
+              <div><br></div>
+              <div><span class="t-success">{"message":"Producto eliminado correctamente"}</span></div>
+            </div>
+          </div>
+
+          <div class="concept-box tip">
+            <div class="concept-box-title">🏆 Documentación automática</div>
+            <p>FastAPI genera Swagger UI automáticamente en <strong>http://localhost:8000/docs</strong>. Ahí puedes probar todos los endpoints con una interfaz visual, sin escribir curl. ¡Es tu mejor aliado para probar y mostrar tu API!</p>
+          </div>
+
+          <div class="concept-box warn">
+            <div class="concept-box-title">🗺️ Resumen de lo que construiste</div>
+            <ul>
+              <li><strong>domain/models.py</strong> — Definiste la forma de tus datos con Pydantic</li>
+              <li><strong>repository/product_repo.py</strong> — Manejaste el acceso a los datos</li>
+              <li><strong>service/product_service.py</strong> — Pusiste la lógica de negocio y reglas</li>
+              <li><strong>api/router.py</strong> — Expusiste los endpoints HTTP</li>
+              <li><strong>main.py</strong> — Ensamblaste todo y lo levantaste</li>
+            </ul>
+          </div>
+
+          <div class="nav-row">
+            <button class="btn btn-secondary" onclick="goTo(6)">← Atrás</button>
+            <button class="btn btn-primary" onclick="goTo(0)">🗺️ Ver visión general</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content-area -->
+  </div><!-- /main -->
+</div><!-- /workspace -->
+
+<script>
+  const TOTAL = 8;
+  let visited = new Set([0]);
+  let current = 0;
+
+  function goTo(idx) {
+    document.getElementById('panel-' + current).classList.remove('active');
+    document.querySelectorAll('.sidebar-item')[idx].classList.remove('active');
+
+    current = idx;
+    visited.add(idx);
+
+    document.getElementById('panel-' + idx).classList.add('active');
+
+    // sidebar
+    document.querySelectorAll('.sidebar-item').forEach((el, i) => {
+      el.classList.toggle('active', i === idx);
+    });
+
+    // tabs
+    document.querySelectorAll('.tab').forEach((el, i) => {
+      el.classList.toggle('active', i === idx);
+    });
+
+    // progress
+    const pct = Math.round((visited.size / TOTAL) * 100);
+    document.getElementById('prog-fill').style.width = pct + '%';
+    document.getElementById('prog-pct').textContent = visited.size + ' / ' + TOTAL;
+
+    document.querySelector('.content-area').scrollTop = 0;
+  }
+
+  // Init sidebar active
+  document.querySelectorAll('.sidebar-item')[0].classList.add('active');
+  document.getElementById('prog-pct').textContent = '1 / ' + TOTAL;
+  document.getElementById('prog-fill').style.width = Math.round(1/TOTAL*100) + '%';
+</script>
+
+
+</body></html>
