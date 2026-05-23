@@ -15,9 +15,10 @@ from app.domain.productos import (
 
 class CategoriaRepositorio:
     """
-    Acceso a la tabla 'categorias'. Por decisión de la HU-PROD-02 NO se crea
-    una categoría automáticamente al registrar un producto: se exige que
-    exista previamente (find-only). Si no, el servicio retorna 404.
+    Acceso a la tabla 'categorias'. En el contexto de la HU-PROD-02 se usa
+    find-only (la categoría debe existir antes de crear un producto). Para
+    poblar el catálogo de categorías se expone también un endpoint POST
+    administrado por 'guardar'.
     """
 
     def __init__(self, db: Session):
@@ -28,12 +29,20 @@ class CategoriaRepositorio:
         # Retorna None si no existe — el servicio decide qué hacer
         return self.db.query(Categoria).filter(Categoria.codigo == codigo).first()
 
+    def guardar(self, categoria: Categoria) -> Categoria:
+        # Inserta una nueva categoría. La BD garantiza unicidad de 'codigo'
+        # vía constraint UNIQUE; el servicio valida antes para devolver 409 limpio
+        self.db.add(categoria)
+        self.db.commit()
+        self.db.refresh(categoria)
+        return categoria
+
 
 class LaboratorioRepositorio:
     """
-    Acceso a la tabla 'laboratorios'. Mismo criterio que categorías:
-    el laboratorio debe existir previamente. Se busca por nombre porque
-    en el body de la HU no llega el id, llega el nombre.
+    Acceso a la tabla 'laboratorios'. En productos se usa find-only por
+    'nombre' (UNIQUE en la BD). El endpoint POST de laboratorios usa
+    'guardar' para poblar el catálogo.
     """
 
     def __init__(self, db: Session):
@@ -43,6 +52,14 @@ class LaboratorioRepositorio:
         # El nombre del laboratorio es UNIQUE en la BD, por eso es seguro
         # usarlo como criterio de búsqueda. Retorna None si no existe
         return self.db.query(Laboratorio).filter(Laboratorio.nombre == nombre).first()
+
+    def guardar(self, laboratorio: Laboratorio) -> Laboratorio:
+        # Inserta un nuevo laboratorio. UNIQUE en 'nombre' a nivel BD;
+        # el servicio valida antes para devolver 409 con mensaje claro
+        self.db.add(laboratorio)
+        self.db.commit()
+        self.db.refresh(laboratorio)
+        return laboratorio
 
 
 class ProductoRepositorio:

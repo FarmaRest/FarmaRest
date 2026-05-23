@@ -14,8 +14,14 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.services.productos import ProductoService
 
-# Prefijo base de todas las rutas de este módulo: /api/v1/productos
+# Prefijo base de las rutas de productos: /api/v1/productos
 router = APIRouter(prefix="/productos", tags=["Productos"])
+
+# Routers separados para los maestros del módulo (categorías y laboratorios).
+# Se montan al mismo nivel que productos: /api/v1/categorias y /api/v1/laboratorios.
+# Tienen su propio 'tags' para que aparezcan en secciones distintas en Swagger
+router_categorias   = APIRouter(prefix="/categorias",   tags=["Categorías"])
+router_laboratorios = APIRouter(prefix="/laboratorios", tags=["Laboratorios"])
 
 
 # ─── Schemas de entrada ──────────────────────────────────────────────────────
@@ -176,6 +182,88 @@ def registrar_producto(body: ProductoIn, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_formato_error(400, "Datos del producto inválidos", "VALIDATION_ERROR", msg)
+        )
+
+
+# ─── Endpoint extra: crear categoría ─────────────────────────────────────────
+# Fuera del alcance de la HU-PROD-02 — habilitado para poblar el catálogo
+# de categorías desde Swagger sin necesidad de insertar a mano en SQL
+
+class CategoriaCreate(BaseModel):
+    """Schema para crear una nueva categoría desde el endpoint POST /categorias."""
+    nombre: str
+    codigo: str
+
+
+@router_categorias.post("", status_code=status.HTTP_201_CREATED)
+def crear_categoria(body: CategoriaCreate, db: Session = Depends(get_db)):
+    """Crea una nueva categoría de productos. Solo administrador."""
+    try:
+        service = ProductoService(db)
+        # Sin JWT por ahora — rol admin hardcodeado hasta HU de autenticación
+        categoria = service.crear_categoria(body.model_dump(), solicitante_rol="admin")
+        data = {
+            "id":     str(categoria.id),
+            "nombre": categoria.nombre,
+            "codigo": categoria.codigo,
+        }
+        return _formato_respuesta(201, "Categoría creada correctamente", data)
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_formato_error(403, "Acceso denegado", "FORBIDDEN",
+                                  "Solo un administrador puede crear categorías.")
+        )
+    except ValueError as e:
+        if "CATEGORY_ALREADY_EXISTS" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_formato_error(409, "La categoría ya existe", "CATEGORY_ALREADY_EXISTS",
+                                      f"Ya existe una categoría con el código '{body.codigo}'.")
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_formato_error(400, "Datos de la categoría inválidos", "VALIDATION_ERROR", str(e))
+        )
+
+
+# ─── Endpoint extra: crear laboratorio ───────────────────────────────────────
+
+class LaboratorioCreate(BaseModel):
+    """Schema para crear un nuevo laboratorio desde el endpoint POST /laboratorios."""
+    nombre: str
+    pais: str
+
+
+@router_laboratorios.post("", status_code=status.HTTP_201_CREATED)
+def crear_laboratorio(body: LaboratorioCreate, db: Session = Depends(get_db)):
+    """Crea un nuevo laboratorio fabricante. Solo administrador."""
+    try:
+        service = ProductoService(db)
+        # Sin JWT por ahora — rol admin hardcodeado hasta HU de autenticación
+        laboratorio = service.crear_laboratorio(body.model_dump(), solicitante_rol="admin")
+        data = {
+            "id":     str(laboratorio.id),
+            "nombre": laboratorio.nombre,
+            "pais":   laboratorio.pais,
+        }
+        return _formato_respuesta(201, "Laboratorio creado correctamente", data)
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_formato_error(403, "Acceso denegado", "FORBIDDEN",
+                                  "Solo un administrador puede crear laboratorios.")
+        )
+    except ValueError as e:
+        if "LAB_ALREADY_EXISTS" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_formato_error(409, "El laboratorio ya existe", "LAB_ALREADY_EXISTS",
+                                      f"Ya existe un laboratorio con el nombre '{body.nombre}'.")
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_formato_error(400, "Datos del laboratorio inválidos", "VALIDATION_ERROR", str(e))
         )
 
 

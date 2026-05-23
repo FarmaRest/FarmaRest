@@ -12,7 +12,7 @@ from app.repositories.productos import (
     CategoriaRepositorio, LaboratorioRepositorio,
     ProductoRepositorio, LoteRepositorio, PresentacionRepositorio,
 )
-from app.domain.productos import Producto, Lote, Presentacion
+from app.domain.productos import Categoria, Laboratorio, Producto, Lote, Presentacion
 
 
 class ProductoService:
@@ -175,3 +175,34 @@ class ProductoService:
             campos["activo"] = datos["activo"]
 
         return self.producto_repo.actualizar(producto, campos)
+
+    # ── Creación de maestros (categorías y laboratorios) ──────────────────
+    # Fuera del alcance estricto de la HU-PROD-02, pero necesario para que
+    # el admin pueda poblar los catálogos desde Swagger sin tocar SQL a mano
+
+    def crear_categoria(self, datos: dict, solicitante_rol: str) -> Categoria:
+        """Crea una nueva categoría de productos. Solo admin."""
+
+        if solicitante_rol != "admin":
+            raise PermissionError("FORBIDDEN")
+
+        # Validación previa para devolver 409 con mensaje claro en vez del
+        # error crudo de la BD si llegara a violar la constraint UNIQUE
+        if self.categoria_repo.buscar_por_codigo(datos["codigo"]):
+            raise ValueError("CATEGORY_ALREADY_EXISTS")
+
+        nueva = Categoria(nombre=datos["nombre"], codigo=datos["codigo"])
+        return self.categoria_repo.guardar(nueva)
+
+    def crear_laboratorio(self, datos: dict, solicitante_rol: str) -> Laboratorio:
+        """Crea un nuevo laboratorio fabricante. Solo admin."""
+
+        if solicitante_rol != "admin":
+            raise PermissionError("FORBIDDEN")
+
+        # Mismo criterio que categorías: chequeo previo para mensaje claro
+        if self.laboratorio_repo.buscar_por_nombre(datos["nombre"]):
+            raise ValueError("LAB_ALREADY_EXISTS")
+
+        nuevo = Laboratorio(nombre=datos["nombre"], pais=datos["pais"])
+        return self.laboratorio_repo.guardar(nuevo)
