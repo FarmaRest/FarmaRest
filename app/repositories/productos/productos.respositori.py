@@ -153,6 +153,24 @@ class LoteRepositorio:
         self.db.refresh(lote)
         return lote
 
+    def listar_con_stock_por_producto(self, producto_id: str) -> list:
+        # HU-PROD-03: lotes con cantidad > 0 ordenados por vencimiento ASC (política FEFO).
+        # El lote más próximo a vencer es el primero en descontarse.
+        return (
+            self.db.query(Lote)
+            .filter(Lote.producto_id == producto_id, Lote.cantidad > 0)
+            .order_by(Lote.fecha_vencimiento.asc())
+            .all()
+        )
+
+    def actualizar_cantidad(self, lote: Lote, nueva_cantidad: int) -> Lote:
+        # flush en lugar de commit: persiste el cambio dentro de la transacción
+        # activa sin cerrarlo. El commit final lo hace descontar_stock_fefo
+        # al actualizar el producto, garantizando atomicidad del proceso completo.
+        lote.cantidad = nueva_cantidad
+        self.db.flush()
+        return lote
+
     def buscar_lote_vigente_por_producto(self, producto_id: str):
         # FEFO: retorna el lote del producto con la fecha_vencimiento más
         # próxima que aún esté en el futuro. Si no hay lotes vigentes,
