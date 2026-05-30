@@ -19,6 +19,11 @@ _spec2 = importlib.util.spec_from_file_location("pagos_domain", _mod_path2)
 _mod2 = importlib.util.module_from_spec(_spec2)
 _spec2.loader.exec_module(_mod2)
 
+_mod_path3 = pathlib.Path(__file__).parent.parent / "app" / "domain" / "envios" / "envios.domain.py"
+_spec3 = importlib.util.spec_from_file_location("envios_domain", _mod_path3)
+_mod3 = importlib.util.module_from_spec(_spec3)
+_spec3.loader.exec_module(_mod3)
+
 config = context.config
 
 config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
