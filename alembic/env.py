@@ -9,10 +9,15 @@ load_dotenv()
 from app.core.base import Base
 import importlib.util, pathlib
 
-_mod_path = pathlib.Path(__file__).parent.parent / "app" / "domain" / "usuarios" / "usuarios.domain.py"
-_spec = importlib.util.spec_from_file_location("usuarios_domain", _mod_path)
-_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
+_usuarios_path = pathlib.Path(__file__).parent.parent / "app" / "domain" / "usuarios" / "usuarios.domain.py"
+_usuarios_spec = importlib.util.spec_from_file_location("usuarios_domain", _usuarios_path)
+_usuarios_mod = importlib.util.module_from_spec(_usuarios_spec)
+_usuarios_spec.loader.exec_module(_usuarios_mod)
+
+_productos_path = pathlib.Path(__file__).parent.parent / "app" / "domain" / "productos" / "productos.domain.py"
+_productos_spec = importlib.util.spec_from_file_location("productos_domain", _productos_path)
+_productos_mod = importlib.util.module_from_spec(_productos_spec)
+_productos_spec.loader.exec_module(_productos_mod)
 
 _mod_path2 = pathlib.Path(__file__).parent.parent / "app" / "domain" / "pagos" / "pagos.domain.py"
 _spec2 = importlib.util.spec_from_file_location("pagos_domain", _mod_path2)
