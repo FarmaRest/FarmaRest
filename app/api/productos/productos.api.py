@@ -110,6 +110,85 @@ def _formato_error(codigo: int, mensaje: str, error_code: str, detalle: str):
     }
 
 
+# ─── HU-PROD-01: Consulta y filtrado del catálogo ────────────────────────────
+
+@router.get("", status_code=status.HTTP_200_OK)
+def listar_productos(
+    categoria: Optional[str] = None,
+    laboratorio: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna el listado de productos activos. Acepta filtros opcionales por
+    categoría (código) y laboratorio (nombre) vía query params.
+    Siempre retorna HTTP 200, con arreglo vacío si no hay resultados.
+    Endpoint público — no requiere autenticación.
+    """
+    try:
+        service = ProductoService(db)
+        productos = service.consultar_catalogo(categoria=categoria, laboratorio=laboratorio)
+        data = [
+            {
+                "id": str(p.id),
+                "nombre": p.nombre,
+                "precio": float(p.precio),
+                "stock": p.stock,
+                "categoria": p.categoria.nombre,
+                "activo": p.activo,
+            }
+            for p in productos
+        ]
+        return _formato_respuesta(200, "Productos obtenidos correctamente", data)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_formato_error(500, "Error interno del servidor", "INTERNAL_ERROR",
+                                  "Ocurrió un error al consultar el catálogo de productos."),
+        )
+
+
+@router.get("/{producto_id}", status_code=status.HTTP_200_OK)
+def consultar_producto(producto_id: str, db: Session = Depends(get_db)):
+    """
+    Retorna el detalle completo de un producto: categoría, laboratorio y
+    presentaciones incluidas. Los productos inactivos retornan 404 para
+    peticiones públicas (clientes). Endpoint público — no requiere autenticación.
+    Pendiente: conectar JWT para que administradores puedan ver productos inactivos.
+    """
+    try:
+        service = ProductoService(db)
+        # Sin JWT: toda petición se trata como pública (es_admin=False)
+        producto = service.consultar_por_id(producto_id, es_admin=False)
+        data = {
+            "id": str(producto.id),
+            "nombre": producto.nombre,
+            "descripcion": producto.descripcion,
+            "precio": float(producto.precio),
+            "aplica_iva": producto.aplica_iva,
+            "stock": producto.stock,
+            "activo": producto.activo,
+            "categoria": {
+                "nombre": producto.categoria.nombre,
+                "codigo": producto.categoria.codigo,
+            },
+            "laboratorio": {
+                "nombre": producto.laboratorio.nombre,
+                "pais": producto.laboratorio.pais,
+            },
+            "presentaciones": [
+                {"tipo": p.tipo, "cantidad": p.cantidad, "unidad": p.unidad}
+                for p in producto.presentaciones
+            ],
+        }
+        return _formato_respuesta(200, "Producto encontrado", data)
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_formato_error(404, "Producto no encontrado", "PRODUCT_NOT_FOUND",
+                                  "No existe un producto con el ID proporcionado"),
+        )
+
+
 # ─── HU-PROD-02: Registro de producto ────────────────────────────────────────
 
 @router.post("", status_code=status.HTTP_201_CREATED)
