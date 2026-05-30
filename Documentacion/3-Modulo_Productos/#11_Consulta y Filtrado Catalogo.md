@@ -134,7 +134,7 @@
   "message": "ID de producto inválido",
   "error": {
     "error_code": "INVALID_ID_FORMAT",
-    "details": "El ID proporcionado no tiene un formato UUID válido",
+    "details": "El ID del producto seleccionado no es válido. Verifica que el enlace o la referencia al producto sea correcta",
     "timestamp": "2026-03-18T22:00:00Z"
   }
 }
@@ -162,6 +162,20 @@
 
 - [ ] Si el producto existe pero tiene `activo = false` y el solicitante es un cliente (o petición pública), el sistema retorna HTTP 404.
 - [ ] Los productos inactivos solo son visibles para administradores.
+
+**Respuesta error producto inactivo (404):**
+```json
+{
+  "success": false,
+  "statusCode": 404,
+  "message": "Producto no encontrado",
+  "error": {
+    "error_code": "PRODUCT_NOT_FOUND",
+    "details": "No existe un producto con el ID proporcionado",
+    "timestamp": "2026-03-18T22:00:00Z"
+  }
+}
+```
 
 ---
 

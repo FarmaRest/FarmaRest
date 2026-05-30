@@ -162,7 +162,7 @@ def consultar_producto(producto_id: str, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_formato_error(400, "ID de producto inválido", "INVALID_ID_FORMAT",
-                                  "El ID proporcionado no tiene un formato UUID válido"),
+                                  "El ID del producto seleccionado no es válido. Verifica que el enlace o la referencia al producto sea correcta"),
         )
     try:
         service = ProductoService(db)
