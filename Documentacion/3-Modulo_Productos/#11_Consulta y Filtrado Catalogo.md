@@ -22,10 +22,11 @@
 ### Consultar producto por ID (`GET /api/v1/productos/{id}`)
 
 1. El cliente o administrador envía una petición GET con el ID del producto en la URL.
-2. El sistema busca el producto en la base de datos por su ID.
-3. Si el producto no existe, retorna error 404.
-4. Si existe pero está inactivo y el solicitante es cliente, retorna error 404 (los productos inactivos no son visibles para clientes).
-5. Si existe y está activo (o el solicitante es administrador), el sistema retorna el detalle completo del producto incluyendo categoría, laboratorio y presentaciones con código HTTP 200.
+2. El sistema valida que el ID tenga formato UUID válido. Si no, retorna error 400.
+3. El sistema busca el producto en la base de datos por su ID.
+4. Si el producto no existe, retorna error 404.
+5. Si existe pero está inactivo y el solicitante es cliente, retorna error 404 (los productos inactivos no son visibles para clientes).
+6. Si existe y está activo (o el solicitante es administrador), el sistema retorna el detalle completo del producto incluyendo categoría, laboratorio y presentaciones con código HTTP 200.
 
 ---
 
@@ -120,7 +121,26 @@
 }
 ```
 
-### 4. ❌ Consulta fallida — producto no encontrado
+### 4. ❌ Consulta fallida — ID con formato inválido
+
+- [ ] Si el ID enviado en la URL no tiene formato UUID válido, el sistema retorna HTTP 400.
+- [ ] No se realiza ninguna consulta a la base de datos.
+
+**Respuesta error formato inválido (400):**
+```json
+{
+  "success": false,
+  "statusCode": 400,
+  "message": "ID de producto inválido",
+  "error": {
+    "error_code": "INVALID_ID_FORMAT",
+    "details": "El ID proporcionado no tiene un formato UUID válido",
+    "timestamp": "2026-03-18T22:00:00Z"
+  }
+}
+```
+
+### 5. ❌ Consulta fallida — producto no encontrado
 
 - [ ] Si el ID no corresponde a ningún producto, el sistema retorna HTTP 404.
 
@@ -138,7 +158,7 @@
 }
 ```
 
-### 5. ❌ Consulta fallida — producto inactivo solicitado por cliente
+### 6. ❌ Consulta fallida — producto inactivo solicitado por cliente
 
 - [ ] Si el producto existe pero tiene `activo = false` y el solicitante es un cliente (o petición pública), el sistema retorna HTTP 404.
 - [ ] Los productos inactivos solo son visibles para administradores.
@@ -221,15 +241,24 @@
   - Código HTTP 200 OK.
   - La respuesta incluye todos los campos de detalle incluyendo `categoria`, `laboratorio` y `presentaciones`.
 
-#### ❌ Caso 5: Consulta de producto inexistente
+#### ❌ Caso 5: Consulta con ID de formato inválido
 
-- **Precondición:** No existe ningún producto con el ID `PROD-999`.
-- **Acción:** Ejecutar `GET /api/v1/productos/PROD-999`.
+- **Precondición:** Ninguna.
+- **Acción:** Ejecutar `GET /api/v1/productos/esto-no-es-un-uuid`.
+- **Resultado esperado:**
+  - Código HTTP 400 Bad Request.
+  - El mensaje indica que el ID no tiene formato UUID válido.
+  - No se realiza ninguna consulta a la base de datos.
+
+#### ❌ Caso 6: Consulta de producto inexistente
+
+- **Precondición:** No existe ningún producto con el ID proporcionado.
+- **Acción:** Ejecutar `GET /api/v1/productos/00000000-0000-0000-0000-000000000000`.
 - **Resultado esperado:**
   - Código HTTP 404 Not Found.
   - El mensaje indica que el producto no existe.
 
-#### ❌ Caso 6: Producto inactivo no visible para cliente
+#### ❌ Caso 7: Producto inactivo no visible para cliente
 
 - **Precondición:** El producto `PROD-050` existe pero tiene `activo = false`.
 - **Acción:** Ejecutar `GET /api/v1/productos/PROD-050` sin token de administrador.
@@ -269,6 +298,7 @@
 ### 🔐 Manejo de Errores
 
 - [ ] Se retorna HTTP 200 con arreglo vacío cuando no hay productos activos.
+- [ ] Se retorna HTTP 400 cuando el ID enviado no tiene formato UUID válido.
 - [ ] Se retorna HTTP 404 cuando el producto no existe o está inactivo (para clientes).
 - [ ] Se retorna HTTP 500 cuando ocurre un error interno del servidor.
 - [ ] Todos los mensajes de error son claros, amigables y no exponen información sensible del sistema.
