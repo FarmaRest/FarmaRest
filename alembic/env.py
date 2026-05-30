@@ -14,6 +14,11 @@ _spec = importlib.util.spec_from_file_location("usuarios_domain", _mod_path)
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 
+_mod_path2 = pathlib.Path(__file__).parent.parent / "app" / "domain" / "pagos" / "pagos.domain.py"
+_spec2 = importlib.util.spec_from_file_location("pagos_domain", _mod_path2)
+_mod2 = importlib.util.module_from_spec(_spec2)
+_spec2.loader.exec_module(_mod2)
+
 config = context.config
 
 config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
