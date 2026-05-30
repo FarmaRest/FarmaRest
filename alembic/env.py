@@ -19,15 +19,15 @@ _productos_spec = importlib.util.spec_from_file_location("productos_domain", _pr
 _productos_mod = importlib.util.module_from_spec(_productos_spec)
 _productos_spec.loader.exec_module(_productos_mod)
 
-_mod_path2 = pathlib.Path(__file__).parent.parent / "app" / "domain" / "pagos" / "pagos.domain.py"
-_spec2 = importlib.util.spec_from_file_location("pagos_domain", _mod_path2)
-_mod2 = importlib.util.module_from_spec(_spec2)
-_spec2.loader.exec_module(_mod2)
+_pagos_path = pathlib.Path(__file__).parent.parent / "app" / "domain" / "pagos" / "pagos.domain.py"
+_pagos_spec = importlib.util.spec_from_file_location("pagos_domain", _pagos_path)
+_pagos_mod = importlib.util.module_from_spec(_pagos_spec)
+_pagos_spec.loader.exec_module(_pagos_mod)
 
-_mod_path3 = pathlib.Path(__file__).parent.parent / "app" / "domain" / "envios" / "envios.domain.py"
-_spec3 = importlib.util.spec_from_file_location("envios_domain", _mod_path3)
-_mod3 = importlib.util.module_from_spec(_spec3)
-_spec3.loader.exec_module(_mod3)
+_envios_path = pathlib.Path(__file__).parent.parent / "app" / "domain" / "envios" / "envios.domain.py"
+_envios_spec = importlib.util.spec_from_file_location("envios_domain", _envios_path)
+_envios_mod = importlib.util.module_from_spec(_envios_spec)
+_envios_spec.loader.exec_module(_envios_mod)
 
 config = context.config
 
