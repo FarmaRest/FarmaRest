@@ -20,8 +20,10 @@ router = APIRouter(prefix="/productos", tags=["Productos"])
 # Routers separados para los maestros del módulo (categorías y laboratorios).
 # Se montan al mismo nivel que productos: /api/v1/categorias y /api/v1/laboratorios.
 # Tienen su propio 'tags' para que aparezcan en secciones distintas en Swagger
-router_categorias   = APIRouter(prefix="/categorias",   tags=["Categorías"])
-router_laboratorios = APIRouter(prefix="/laboratorios", tags=["Laboratorios"])
+router_categorias    = APIRouter(prefix="/categorias",    tags=["Categorías"])
+router_laboratorios  = APIRouter(prefix="/laboratorios",  tags=["Laboratorios"])
+router_lotes         = APIRouter(prefix="/lotes",         tags=["Lotes"])
+router_presentaciones = APIRouter(prefix="/presentaciones", tags=["Presentaciones"])
 
 
 # ─── Schemas de entrada ──────────────────────────────────────────────────────
@@ -61,6 +63,7 @@ class ProductoIn(BaseModel):
     descripcion: Optional[str] = None
     precio: float
     stock: int
+    aplica_iva: Optional[bool] = False
     # El cliente puede mandar 'activo' pero el sistema lo recalcula:
     # stock = 0 → false; stock > 0 con vencimiento OK → true
     activo: Optional[bool] = None
@@ -81,6 +84,7 @@ class ProductoUpdate(BaseModel):
     descripcion: Optional[str] = None
     precio: Optional[float]    = None
     stock: Optional[int]       = None
+    aplica_iva: Optional[bool] = None
     activo: Optional[bool]     = None
 
 
@@ -131,6 +135,7 @@ def registrar_producto(body: ProductoIn, db: Session = Depends(get_db)):
             "id": str(producto.id),
             "nombre": producto.nombre,
             "precio": float(producto.precio),
+            "aplica_iva": producto.aplica_iva,
             "stock": producto.stock,
             "lote": lote.codigo_lote,
             "fecha_vencimiento": lote.fecha_vencimiento.isoformat(),
@@ -166,6 +171,12 @@ def registrar_producto(body: ProductoIn, db: Session = Depends(get_db)):
         )
     except ValueError as e:
         msg = str(e)
+        if "LOTE_ALREADY_EXISTS" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_formato_error(409, "El código de lote ya existe", "LOTE_ALREADY_EXISTS",
+                                      f"Ya existe un lote con el código '{body.lote.codigoLote}'.")
+            )
         if "INVALID_PRICE" in msg:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -185,14 +196,21 @@ def registrar_producto(body: ProductoIn, db: Session = Depends(get_db)):
         )
 
 
-# ─── Endpoint extra: crear categoría ─────────────────────────────────────────
-# Fuera del alcance de la HU-PROD-02 — habilitado para poblar el catálogo
-# de categorías desde Swagger sin necesidad de insertar a mano en SQL
+# ─── Categorías ──────────────────────────────────────────────────────────────
 
 class CategoriaCreate(BaseModel):
     """Schema para crear una nueva categoría desde el endpoint POST /categorias."""
     nombre: str
     codigo: str
+
+
+@router_categorias.get("", status_code=status.HTTP_200_OK)
+def listar_categorias(db: Session = Depends(get_db)):
+    """Retorna todas las categorías registradas en el sistema."""
+    service = ProductoService(db)
+    categorias = service.listar_categorias()
+    data = [{"id": str(c.id), "nombre": c.nombre, "codigo": c.codigo} for c in categorias]
+    return _formato_respuesta(200, "Categorías obtenidas correctamente", data)
 
 
 @router_categorias.post("", status_code=status.HTTP_201_CREATED)
@@ -227,12 +245,21 @@ def crear_categoria(body: CategoriaCreate, db: Session = Depends(get_db)):
         )
 
 
-# ─── Endpoint extra: crear laboratorio ───────────────────────────────────────
+# ─── Laboratorios ────────────────────────────────────────────────────────────
 
 class LaboratorioCreate(BaseModel):
     """Schema para crear un nuevo laboratorio desde el endpoint POST /laboratorios."""
     nombre: str
     pais: str
+
+
+@router_laboratorios.get("", status_code=status.HTTP_200_OK)
+def listar_laboratorios(db: Session = Depends(get_db)):
+    """Retorna todos los laboratorios registrados en el sistema."""
+    service = ProductoService(db)
+    labs = service.listar_laboratorios()
+    data = [{"id": str(l.id), "nombre": l.nombre, "pais": l.pais} for l in labs]
+    return _formato_respuesta(200, "Laboratorios obtenidos correctamente", data)
 
 
 @router_laboratorios.post("", status_code=status.HTTP_201_CREATED)
@@ -291,6 +318,7 @@ def actualizar_producto(producto_id: str, body: ProductoUpdate, db: Session = De
             "nombre": producto.nombre,
             "descripcion": producto.descripcion,
             "precio": float(producto.precio),
+            "aplica_iva": producto.aplica_iva,
             "stock": producto.stock,
             "activo": producto.activo,
         }
@@ -325,4 +353,155 @@ def actualizar_producto(producto_id: str, body: ProductoUpdate, db: Session = De
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_formato_error(400, "Datos del producto inválidos", "VALIDATION_ERROR", msg)
+        )
+
+
+# ─── Lotes ───────────────────────────────────────────────────────────────────
+
+class LoteAdicionalIn(BaseModel):
+    """Schema para agregar un lote a un producto ya existente."""
+    codigoLote: str
+    fechaVencimiento: date
+    cantidad: int
+
+
+@router_lotes.get("/{producto_id}", status_code=status.HTTP_200_OK)
+def listar_lotes(producto_id: str, db: Session = Depends(get_db)):
+    """Retorna todos los lotes de un producto ordenados por fecha de vencimiento (FEFO)."""
+    try:
+        service = ProductoService(db)
+        lotes = service.listar_lotes(producto_id)
+        data = [
+            {
+                "id": str(l.id),
+                "codigo_lote": l.codigo_lote,
+                "cantidad": l.cantidad,
+                "fecha_vencimiento": l.fecha_vencimiento.isoformat(),
+                "fecha_ingreso": l.fecha_ingreso.isoformat(),
+            }
+            for l in lotes
+        ]
+        return _formato_respuesta(200, "Lotes obtenidos correctamente", data)
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_formato_error(404, "Producto no encontrado", "PRODUCT_NOT_FOUND",
+                                  "No existe un producto con el ID proporcionado")
+        )
+
+
+@router_lotes.post("/{producto_id}", status_code=status.HTTP_201_CREATED)
+def agregar_lote(producto_id: str, body: LoteAdicionalIn, db: Session = Depends(get_db)):
+    """
+    Agrega un nuevo lote a un producto existente.
+    Incrementa el stock del producto con la cantidad del lote y recalcula 'activo'.
+    La fecha de vencimiento debe ser mayor a 15 días desde hoy.
+    """
+    try:
+        service = ProductoService(db)
+        lote, producto = service.agregar_lote(
+            producto_id, body.model_dump(), solicitante_rol="admin"
+        )
+        data = {
+            "id": str(lote.id),
+            "producto_id": str(lote.producto_id),
+            "codigo_lote": lote.codigo_lote,
+            "cantidad": lote.cantidad,
+            "fecha_vencimiento": lote.fecha_vencimiento.isoformat(),
+            "stock_producto": producto.stock,
+            "activo_producto": producto.activo,
+        }
+        return _formato_respuesta(201, "Lote agregado correctamente", data)
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_formato_error(403, "Acceso denegado", "FORBIDDEN",
+                                  "Solo un administrador puede agregar lotes.")
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_formato_error(404, "Producto no encontrado", "PRODUCT_NOT_FOUND",
+                                  "No existe un producto con el ID proporcionado")
+        )
+    except ValueError as e:
+        msg = str(e)
+        if "LOTE_ALREADY_EXISTS" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_formato_error(409, "El código de lote ya existe", "LOTE_ALREADY_EXISTS",
+                                      f"Ya existe un lote con el código '{body.codigoLote}'.")
+            )
+        if "PRODUCT_NEAR_EXPIRY" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=_formato_error(400, "Fecha de vencimiento inválida", "PRODUCT_NEAR_EXPIRY",
+                                      "La fecha de vencimiento del lote debe ser mayor a 15 días desde la fecha actual.")
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_formato_error(400, "Datos del lote inválidos", "VALIDATION_ERROR", msg)
+        )
+
+
+# ─── Presentaciones ───────────────────────────────────────────────────────────
+
+class PresentacionUpdate(BaseModel):
+    """Schema para actualizar una presentación existente. Todos los campos son opcionales."""
+    tipo: Optional[str]     = None
+    cantidad: Optional[int] = None
+    unidad: Optional[str]   = None
+
+
+@router_presentaciones.get("/{producto_id}", status_code=status.HTTP_200_OK)
+def listar_presentaciones(producto_id: str, db: Session = Depends(get_db)):
+    """Retorna todas las presentaciones comerciales de un producto."""
+    try:
+        service = ProductoService(db)
+        presentaciones = service.listar_presentaciones(producto_id)
+        data = [
+            {
+                "id": str(p.id),
+                "tipo": p.tipo,
+                "cantidad": p.cantidad,
+                "unidad": p.unidad,
+            }
+            for p in presentaciones
+        ]
+        return _formato_respuesta(200, "Presentaciones obtenidas correctamente", data)
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_formato_error(404, "Producto no encontrado", "PRODUCT_NOT_FOUND",
+                                  "No existe un producto con el ID proporcionado")
+        )
+
+
+@router_presentaciones.put("/{presentacion_id}", status_code=status.HTTP_200_OK)
+def actualizar_presentacion(presentacion_id: str, body: PresentacionUpdate, db: Session = Depends(get_db)):
+    """Actualiza los datos de una presentación existente (tipo, cantidad o unidad)."""
+    try:
+        service = ProductoService(db)
+        presentacion = service.actualizar_presentacion(
+            presentacion_id, body.model_dump(exclude_none=True), solicitante_rol="admin"
+        )
+        data = {
+            "id": str(presentacion.id),
+            "producto_id": str(presentacion.producto_id),
+            "tipo": presentacion.tipo,
+            "cantidad": presentacion.cantidad,
+            "unidad": presentacion.unidad,
+        }
+        return _formato_respuesta(200, "Presentación actualizada correctamente", data)
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_formato_error(403, "Acceso denegado", "FORBIDDEN",
+                                  "Solo un administrador puede modificar presentaciones.")
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_formato_error(404, "Presentación no encontrada", "PRESENTACION_NOT_FOUND",
+                                  "No existe una presentación con el ID proporcionado")
         )

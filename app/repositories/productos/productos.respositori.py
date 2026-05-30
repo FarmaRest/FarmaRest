@@ -29,6 +29,9 @@ class CategoriaRepositorio:
         # Retorna None si no existe — el servicio decide qué hacer
         return self.db.query(Categoria).filter(Categoria.codigo == codigo).first()
 
+    def listar_todas(self) -> list:
+        return self.db.query(Categoria).order_by(Categoria.nombre).all()
+
     def guardar(self, categoria: Categoria) -> Categoria:
         # Inserta una nueva categoría. La BD garantiza unicidad de 'codigo'
         # vía constraint UNIQUE; el servicio valida antes para devolver 409 limpio
@@ -52,6 +55,9 @@ class LaboratorioRepositorio:
         # El nombre del laboratorio es UNIQUE en la BD, por eso es seguro
         # usarlo como criterio de búsqueda. Retorna None si no existe
         return self.db.query(Laboratorio).filter(Laboratorio.nombre == nombre).first()
+
+    def listar_todos(self) -> list:
+        return self.db.query(Laboratorio).order_by(Laboratorio.nombre).all()
 
     def guardar(self, laboratorio: Laboratorio) -> Laboratorio:
         # Inserta un nuevo laboratorio. UNIQUE en 'nombre' a nivel BD;
@@ -107,6 +113,17 @@ class LoteRepositorio:
     def __init__(self, db: Session):
         self.db = db
 
+    def buscar_por_codigo(self, codigo_lote: str):
+        return self.db.query(Lote).filter(Lote.codigo_lote == codigo_lote).first()
+
+    def listar_por_producto(self, producto_id: str) -> list:
+        return (
+            self.db.query(Lote)
+            .filter(Lote.producto_id == producto_id)
+            .order_by(Lote.fecha_vencimiento.asc())
+            .all()
+        )
+
     def guardar(self, lote: Lote) -> Lote:
         # Inserta el lote y refresca para obtener id y fecha_ingreso
         self.db.add(lote)
@@ -137,6 +154,23 @@ class PresentacionRepositorio:
 
     def __init__(self, db: Session):
         self.db = db
+
+    def listar_por_producto(self, producto_id: str) -> list:
+        return (
+            self.db.query(Presentacion)
+            .filter(Presentacion.producto_id == producto_id)
+            .all()
+        )
+
+    def buscar_por_id(self, presentacion_id: str):
+        return self.db.query(Presentacion).filter(Presentacion.id == presentacion_id).first()
+
+    def actualizar(self, presentacion: Presentacion, campos: dict) -> Presentacion:
+        for campo, valor in campos.items():
+            setattr(presentacion, campo, valor)
+        self.db.commit()
+        self.db.refresh(presentacion)
+        return presentacion
 
     def guardar_todas(self, presentaciones: list[Presentacion]) -> list[Presentacion]:
         # Recorre la lista agregando cada presentación a la sesión.

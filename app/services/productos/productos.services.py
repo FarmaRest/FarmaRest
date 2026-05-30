@@ -67,6 +67,10 @@ class ProductoService:
         if not self._vencimiento_valido(lote_data["fechaVencimiento"]):
             raise ValueError("PRODUCT_NEAR_EXPIRY")
 
+        # Código de lote no puede estar duplicado en el sistema
+        if self.lote_repo.buscar_por_codigo(lote_data["codigoLote"]):
+            raise ValueError("LOTE_ALREADY_EXISTS")
+
         # Categoría y laboratorio deben existir: NO se crean automáticamente
         # (decisión tomada en el plan de la HU)
         categoria = self.categoria_repo.buscar_por_codigo(datos["categoria"]["codigo"])
@@ -88,6 +92,7 @@ class ProductoService:
             nombre=datos["nombre"],
             descripcion=datos.get("descripcion"),
             precio=datos["precio"],
+            aplica_iva=datos.get("aplica_iva", False),
             stock=stock,
             activo=activo,
             categoria_id=categoria.id,
@@ -174,11 +179,75 @@ class ProductoService:
             # porque cuando el stock cambia el sistema lo recalcula automáticamente
             campos["activo"] = datos["activo"]
 
+        if datos.get("aplica_iva") is not None:
+            campos["aplica_iva"] = datos["aplica_iva"]
+
         return self.producto_repo.actualizar(producto, campos)
 
     # ── Creación de maestros (categorías y laboratorios) ──────────────────
     # Fuera del alcance estricto de la HU-PROD-02, pero necesario para que
     # el admin pueda poblar los catálogos desde Swagger sin tocar SQL a mano
+
+    def listar_categorias(self) -> list:
+        return self.categoria_repo.listar_todas()
+
+    def listar_laboratorios(self) -> list:
+        return self.laboratorio_repo.listar_todos()
+
+    def agregar_lote(self, producto_id: str, datos: dict, solicitante_rol: str):
+        """Agrega un nuevo lote a un producto existente y recalcula su stock y activo."""
+        if solicitante_rol != "admin":
+            raise PermissionError("FORBIDDEN")
+
+        producto = self.producto_repo.buscar_por_id(producto_id)
+        if not producto:
+            raise LookupError("PRODUCT_NOT_FOUND")
+
+        if not self._vencimiento_valido(datos["fechaVencimiento"]):
+            raise ValueError("PRODUCT_NEAR_EXPIRY")
+
+        if self.lote_repo.buscar_por_codigo(datos["codigoLote"]):
+            raise ValueError("LOTE_ALREADY_EXISTS")
+
+        lote = Lote(
+            producto_id=producto.id,
+            codigo_lote=datos["codigoLote"],
+            cantidad=datos["cantidad"],
+            fecha_vencimiento=datos["fechaVencimiento"],
+        )
+        lote_guardado = self.lote_repo.guardar(lote)
+
+        # El stock del producto aumenta con la cantidad del nuevo lote
+        nuevo_stock = producto.stock + datos["cantidad"]
+        lote_vigente = self.lote_repo.buscar_lote_vigente_por_producto(str(producto.id))
+        activo = nuevo_stock > 0 and lote_vigente is not None and self._vencimiento_valido(lote_vigente.fecha_vencimiento)
+        self.producto_repo.actualizar(producto, {"stock": nuevo_stock, "activo": activo})
+
+        return lote_guardado, producto
+
+    def listar_lotes(self, producto_id: str) -> list:
+        producto = self.producto_repo.buscar_por_id(producto_id)
+        if not producto:
+            raise LookupError("PRODUCT_NOT_FOUND")
+        return self.lote_repo.listar_por_producto(producto_id)
+
+    def listar_presentaciones(self, producto_id: str) -> list:
+        producto = self.producto_repo.buscar_por_id(producto_id)
+        if not producto:
+            raise LookupError("PRODUCT_NOT_FOUND")
+        return self.presentacion_repo.listar_por_producto(producto_id)
+
+    def actualizar_presentacion(self, presentacion_id: str, datos: dict, solicitante_rol: str):
+        """Actualiza tipo, cantidad o unidad de una presentación existente."""
+        if solicitante_rol != "admin":
+            raise PermissionError("FORBIDDEN")
+
+        presentacion = self.presentacion_repo.buscar_por_id(presentacion_id)
+        if not presentacion:
+            raise LookupError("PRESENTACION_NOT_FOUND")
+
+        campos = {k: v for k, v in datos.items() if v is not None}
+        return self.presentacion_repo.actualizar(presentacion, campos)
 
     def crear_categoria(self, datos: dict, solicitante_rol: str) -> Categoria:
         """Crea una nueva categoría de productos. Solo admin."""
