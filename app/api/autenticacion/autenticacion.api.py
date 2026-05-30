@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.core.database import get_db
@@ -26,6 +26,12 @@ class RefreshTokenRequest(BaseModel):
     refreshToken: str
 
 
+class CambiarContrasenaRequest(BaseModel):
+    correo: str
+    contrasenaActual: str
+    contrasenaNueva: str
+
+
 @router.post("/login")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     service = AutenticacionService(db)
@@ -42,3 +48,9 @@ def logout(request: LogoutRequest, db: Session = Depends(get_db)):
 def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
     service = AutenticacionService(db)
     return service.refresh_token(request.refreshToken)
+
+
+@router.patch("/cambiar-contrasena")
+def cambiar_contrasena(request: CambiarContrasenaRequest, db: Session = Depends(get_db)):
+    service = AutenticacionService(db)
+    return service.cambiar_contrasena(request.correo, request.contrasenaActual, request.contrasenaNueva)
