@@ -34,6 +34,11 @@ _carritos_spec = importlib.util.spec_from_file_location("carritos_domain", _carr
 _carritos_mod = importlib.util.module_from_spec(_carritos_spec)
 _carritos_spec.loader.exec_module(_carritos_mod)
 
+_pedidos_path = pathlib.Path(__file__).parent.parent / "app" / "domain" / "pedidos" / "pedidos.domain.py"
+_pedidos_spec = importlib.util.spec_from_file_location("pedidos_domain", _pedidos_path)
+_pedidos_mod = importlib.util.module_from_spec(_pedidos_spec)
+_pedidos_spec.loader.exec_module(_pedidos_mod)
+
 config = context.config
 
 config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
