@@ -14,6 +14,11 @@ _usuarios_spec = importlib.util.spec_from_file_location("usuarios_domain", _usua
 _usuarios_mod = importlib.util.module_from_spec(_usuarios_spec)
 _usuarios_spec.loader.exec_module(_usuarios_mod)
 
+_autenticacion_path = pathlib.Path(__file__).parent.parent / "app" / "domain" / "autenticacion" / "autenticacion.domain.py"
+_autenticacion_spec = importlib.util.spec_from_file_location("autenticacion_domain", _autenticacion_path)
+_autenticacion_mod = importlib.util.module_from_spec(_autenticacion_spec)
+_autenticacion_spec.loader.exec_module(_autenticacion_mod)
+
 _productos_path = pathlib.Path(__file__).parent.parent / "app" / "domain" / "productos" / "productos.domain.py"
 _productos_spec = importlib.util.spec_from_file_location("productos_domain", _productos_path)
 _productos_mod = importlib.util.module_from_spec(_productos_spec)
