@@ -52,6 +52,7 @@ class Usuario(Base):
     direcciones       = relationship("Direccion",       back_populates="usuario", cascade="all, delete-orphan")
     historial_correos = relationship("HistorialCorreo", back_populates="usuario", cascade="all, delete-orphan")
     sesiones          = relationship("Sesion",          back_populates="usuario", cascade="all, delete-orphan")
+    carritos          = relationship("Carrito",         back_populates="usuario", cascade="all, delete-orphan")
 
 
 class Direccion(Base):

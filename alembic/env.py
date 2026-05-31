@@ -29,6 +29,11 @@ _envios_spec = importlib.util.spec_from_file_location("envios_domain", _envios_p
 _envios_mod = importlib.util.module_from_spec(_envios_spec)
 _envios_spec.loader.exec_module(_envios_mod)
 
+_carritos_path = pathlib.Path(__file__).parent.parent / "app" / "domain" / "carritos" / "carritos.domain.py"
+_carritos_spec = importlib.util.spec_from_file_location("carritos_domain", _carritos_path)
+_carritos_mod = importlib.util.module_from_spec(_carritos_spec)
+_carritos_spec.loader.exec_module(_carritos_mod)
+
 config = context.config
 
 config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
