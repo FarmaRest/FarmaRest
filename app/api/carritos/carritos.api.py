@@ -62,6 +62,16 @@ def _manejar_error(e: Exception):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_error(400, "Stock insuficiente para la cantidad solicitada", code, detail),
         )
+    if code == "MAX_UNITS_EXCEEDED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_error(400, "Has superado el límite de unidades permitidas para este producto", code, detail),
+        )
+    if code == "MIN_PRODUCTS_NOT_MET":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_error(400, "El carrito no cumple el mínimo de productos requeridos para proceder al pago", code, detail),
+        )
     if code == "CART_ITEM_NOT_FOUND":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
