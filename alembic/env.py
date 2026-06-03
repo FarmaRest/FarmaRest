@@ -9,10 +9,19 @@ load_dotenv()
 from app.core.base import Base
 import importlib.util, pathlib
 
-_mod_path = pathlib.Path(__file__).parent.parent / "app" / "domain" / "usuarios" / "usuarios.domain.py"
-_spec = importlib.util.spec_from_file_location("usuarios_domain", _mod_path)
-_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
+def _cargar_domain(nombre: str, ruta_relativa: str):
+    path = pathlib.Path(__file__).parent.parent / "app" / "domain" / ruta_relativa
+    spec = importlib.util.spec_from_file_location(nombre, path)
+    mod  = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+_cargar_domain("usuarios_domain",   "usuarios/usuarios.domain.py")
+_cargar_domain("productos_domain",  "productos/productos.domain.py")
+_cargar_domain("carritos_domain",   "carritos/carritos.domain.py")
+_cargar_domain("pedidos_domain",    "pedidos/pedidos.domain.py")
+_cargar_domain("pagos_domain",      "pagos/pagos.domain.py")
+_cargar_domain("envios_domain",     "envios/envios.domain.py")
+_cargar_domain("autenticacion_domain", "autenticacion/autenticacion.domain.py")
 
 config = context.config
 
