@@ -7,6 +7,7 @@ from app.core.base import Base
 
 class Sesion(Base):
     __tablename__ = "sesiones"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     usuario_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
