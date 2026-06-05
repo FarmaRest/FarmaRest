@@ -6,6 +6,13 @@ from pydantic import BaseModel
 from routes import router
 from app.core.cron import iniciar_cron
 
+# Importar todos los modelos para que SQLAlchemy los registre correctamente
+from app.domain.usuarios import Usuario, Direccion, HistorialCorreo, HistorialContrasena
+from app.domain.autenticacion import Sesion
+from app.domain.pedidos import Pedido, ItemPedido
+from app.domain.productos import Producto, Lote, Presentacion, Categoria, Laboratorio
+from app.domain.carritos import Carrito, ItemCarrito
+
 app = FastAPI(
     title="FarmaRest",
     description="API REST para plataforma de ventas farmacéuticas",
@@ -18,7 +25,6 @@ app.include_router(router)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Convierte los errores 422 de Pydantic a 400 según lo exige la HU-USR-01."""
     primer_error = exc.errors()[0] if exc.errors() else {}
     campo = ".".join(str(x) for x in primer_error.get("loc", [])[1:])
     detalle = primer_error.get("msg", "Dato inválido")
@@ -55,9 +61,6 @@ class HealthResponse(BaseModel):
 
 @app.get("/", tags=["Inicio"])
 def root():
-    """
-    Endpoint principal
-    """
     return {"message": "Hola Mundo"}
 
 @app.get(

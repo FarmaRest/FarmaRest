@@ -1,34 +1,45 @@
 from sqlalchemy.orm import Session
-from datetime import datetime
-import importlib.util, os
+from datetime import datetime, timezone
+from app.domain.autenticacion import Sesion
 
-_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "domain", "autenticacion", "autenticacion.domain.py"))
-_spec = importlib.util.spec_from_file_location("autenticacion_domain", _path)
-_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
-Token = _mod.Token
 
-class TokenRepositorio:
+class AutenticacionRepositorio:
     def __init__(self, db: Session):
         self.db = db
 
-    def crear_token(self, usuario_id: int, token: str, fecha_expiracion: datetime):
-        nuevo_token = Token(
-            usuario_id=usuario_id,
-            token=token,
-            fecha_expiracion=fecha_expiracion
-        )
-        self.db.add(nuevo_token)
+    def guardar(self, sesion: Sesion) -> Sesion:
+        self.db.add(sesion)
         self.db.commit()
-        self.db.refresh(nuevo_token)
-        return nuevo_token
+        self.db.refresh(sesion)
+        return sesion
 
-    def obtener_token(self, token: str):
-        return self.db.query(Token).filter(Token.token == token, Token.activo == True).first()
+    def buscar_por_refresh_token(self, refresh_token: str):
+        return self.db.query(Sesion).filter(
+            Sesion.refresh_token == refresh_token,
+            Sesion.activa == True
+        ).first()
 
-    def desactivar_token(self, token: str):
-        registro = self.obtener_token(token)
-        if registro:
-            registro.activo = False
+    def buscar_por_access_token(self, access_token: str):
+        return self.db.query(Sesion).filter(
+            Sesion.access_token == access_token,
+            Sesion.activa == True
+        ).first()
+
+    def desactivar_sesion(self, sesion_id) -> None:
+        sesion = self.db.query(Sesion).filter(Sesion.id == sesion_id).first()
+        if sesion:
+            sesion.activa = False
             self.db.commit()
-        return registro
+
+    def actualizar_access_token(self, sesion_id, nuevo_access_token: str, nueva_fecha_expiracion: datetime) -> Sesion:
+        sesion = self.db.query(Sesion).filter(Sesion.id == sesion_id).first()
+        if sesion:
+            sesion.access_token = nuevo_access_token
+            sesion.fecha_expiracion_access = nueva_fecha_expiracion
+            self.db.commit()
+            self.db.refresh(sesion)
+        return sesion
+
+    def eliminar_por_usuario_id(self, usuario_id) -> None:
+        self.db.query(Sesion).filter(Sesion.usuario_id == usuario_id).update({"activa": False})
+        self.db.commit()
