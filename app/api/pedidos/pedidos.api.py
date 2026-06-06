@@ -6,6 +6,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import importlib.util, os
+from uuid import UUID
 
 from app.core.database import get_db
 
@@ -46,4 +47,30 @@ def crear_pedido(
         direccion=body.direccion_entrega.direccion,
         ciudad=body.direccion_entrega.ciudad,
         metodo_pago=body.metodo_pago
+    )
+
+
+@router.get("")
+def listar_pedidos(
+    db: Session = Depends(get_db),
+    usuario_actual = Depends(get_usuario_actual)
+):
+    servicio = PedidoService(db)
+    return servicio.listar_pedidos(
+        usuario_id=usuario_actual.id,
+        rol=usuario_actual.rol
+    )
+
+
+@router.get("/{pedido_id}")
+def consultar_pedido(
+    pedido_id: UUID,
+    db: Session = Depends(get_db),
+    usuario_actual = Depends(get_usuario_actual)
+):
+    servicio = PedidoService(db)
+    return servicio.consultar_por_id(
+        pedido_id=pedido_id,
+        usuario_id=usuario_actual.id,
+        rol=usuario_actual.rol
     )

@@ -140,3 +140,72 @@ class PedidoService:
                 "fechaCreacion": pedido.fecha_creacion.isoformat()
             }
         }
+
+    def listar_pedidos(self, usuario_id, rol: str) -> dict:
+        if rol == "administrador":
+            pedidos = self.pedido_repo.listar_todos()
+        else:
+            pedidos = self.pedido_repo.buscar_por_usuario_id(usuario_id)
+
+        return {
+            "success": True,
+            "statusCode": 200,
+            "message": "Pedidos obtenidos correctamente",
+            "data": [
+                {
+                    "pedidoId": str(p.id),
+                    "usuarioId": str(p.usuario_id),
+                    "estado": p.estado,
+                    "subtotalBase": float(p.subtotal_base),
+                    "totalIva": float(p.total_iva),
+                    "total": float(p.total),
+                    "fechaCreacion": p.fecha_creacion.isoformat()
+                } for p in pedidos
+            ]
+        }
+
+    def consultar_por_id(self, pedido_id, usuario_id, rol: str) -> dict:
+        ahora = datetime.now(timezone.utc)
+        pedido = self.pedido_repo.buscar_por_id(pedido_id)
+        if not pedido:
+            raise HTTPException(status_code=404, detail={
+                "success": False, "statusCode": 404,
+                "message": "Pedido no encontrado",
+                "error": {"error_code": "ORDER_NOT_FOUND",
+                          "details": "No existe un pedido con el ID proporcionado",
+                          "timestamp": ahora.isoformat()}
+            })
+        if rol != "administrador" and str(pedido.usuario_id) != str(usuario_id):
+            raise HTTPException(status_code=403, detail={
+                "success": False, "statusCode": 403,
+                "message": "Acceso denegado",
+                "error": {"error_code": "FORBIDDEN",
+                          "details": "No tiene permisos para consultar este pedido.",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        items = self.item_pedido_repo.buscar_por_pedido_id(pedido_id)
+
+        return {
+            "success": True,
+            "statusCode": 200,
+            "message": "Pedido encontrado",
+            "data": {
+                "pedidoId": str(pedido.id),
+                "usuarioId": str(pedido.usuario_id),
+                "estado": pedido.estado,
+                "items": [
+                    {
+                        "productoId": str(i.producto_id),
+                        "cantidad": i.cantidad,
+                        "precioUnitario": float(i.precio_unitario),
+                        "ivaUnitario": float(i.iva_unitario),
+                        "subtotal": float(i.subtotal)
+                    } for i in items
+                ],
+                "subtotalBase": float(pedido.subtotal_base),
+                "totalIva": float(pedido.total_iva),
+                "total": float(pedido.total),
+                "fechaCreacion": pedido.fecha_creacion.isoformat()
+            }
+        }

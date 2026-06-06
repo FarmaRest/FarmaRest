@@ -29,6 +29,7 @@ _mod_usr = importlib.util.module_from_spec(_spec_usr)
 _spec_usr.loader.exec_module(_mod_usr)
 UsuarioRepositorio = _mod_usr.UsuarioRepositorio
 
+# Cargar modelo Sesion usando import directo
 from app.domain.autenticacion import Sesion
 
 SECRET_KEY = os.getenv("SECRET_KEY", "cambia-este-valor-en-produccion")

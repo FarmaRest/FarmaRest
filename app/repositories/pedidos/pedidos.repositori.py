@@ -19,6 +19,9 @@ class PedidoRepositorio:
             Pedido.usuario_id == usuario_id
         ).order_by(Pedido.fecha_creacion.desc()).all()
 
+    def listar_todos(self) -> list:
+        return self.db.query(Pedido).order_by(Pedido.fecha_creacion.desc()).all()
+
 
 class ItemPedidoRepositorio:
     def __init__(self, db: Session):
@@ -29,3 +32,8 @@ class ItemPedidoRepositorio:
             self.db.add(item)
         self.db.flush()
         return items
+
+    def buscar_por_pedido_id(self, pedido_id) -> list:
+        return self.db.query(ItemPedido).filter(
+            ItemPedido.pedido_id == pedido_id
+        ).all()
