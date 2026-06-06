@@ -6,11 +6,19 @@
 # sesión de SQLAlchemy ya inyectada y delega la traducción a SQL al ORM.
 # ─────────────────────────────────────────────────────────────────────────────
 
+import uuid
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
 from app.domain.productos import (
     Categoria, Laboratorio, Producto, Lote, Presentacion,
 )
+
+
+def _to_uuid(value: str):
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, AttributeError):
+        return None
 
 
 class CategoriaRepositorio:
@@ -81,7 +89,10 @@ class ProductoRepositorio:
     def buscar_por_id(self, producto_id: str):
         # Busca un producto por UUID. Retorna None si no existe.
         # Se usa antes de actualizar para devolver 404 limpio
-        return self.db.query(Producto).filter(Producto.id == producto_id).first()
+        uid = _to_uuid(producto_id)
+        if uid is None:
+            return None
+        return self.db.query(Producto).filter(Producto.id == uid).first()
 
     def listar_activos(self, categoria_codigo: str = None, laboratorio_nombre: str = None) -> list:
         # joinedload carga categoria, laboratorio y presentaciones en una sola
@@ -139,9 +150,12 @@ class LoteRepositorio:
         return self.db.query(Lote).filter(Lote.codigo_lote == codigo_lote).first()
 
     def listar_por_producto(self, producto_id: str) -> list:
+        uid = _to_uuid(producto_id)
+        if uid is None:
+            return []
         return (
             self.db.query(Lote)
-            .filter(Lote.producto_id == producto_id)
+            .filter(Lote.producto_id == uid)
             .order_by(Lote.fecha_vencimiento.asc())
             .all()
         )
@@ -153,14 +167,38 @@ class LoteRepositorio:
         self.db.refresh(lote)
         return lote
 
+    def listar_con_stock_por_producto(self, producto_id: str) -> list:
+        # HU-PROD-03: lotes con cantidad > 0 ordenados por vencimiento ASC (política FEFO).
+        # El lote más próximo a vencer es el primero en descontarse.
+        uid = _to_uuid(producto_id)
+        if uid is None:
+            return []
+        return (
+            self.db.query(Lote)
+            .filter(Lote.producto_id == uid, Lote.cantidad > 0)
+            .order_by(Lote.fecha_vencimiento.asc())
+            .all()
+        )
+
+    def actualizar_cantidad(self, lote: Lote, nueva_cantidad: int) -> Lote:
+        # flush en lugar de commit: persiste el cambio dentro de la transacción
+        # activa sin cerrarlo. El commit final lo hace descontar_stock_fefo
+        # al actualizar el producto, garantizando atomicidad del proceso completo.
+        lote.cantidad = nueva_cantidad
+        self.db.flush()
+        return lote
+
     def buscar_lote_vigente_por_producto(self, producto_id: str):
         # FEFO: retorna el lote del producto con la fecha_vencimiento más
         # próxima que aún esté en el futuro. Si no hay lotes vigentes,
         # retorna None y el servicio decide poner 'activo = FALSE'.
         # Esta es la consulta crítica del recálculo automático del PUT
+        uid = _to_uuid(producto_id)
+        if uid is None:
+            return None
         return (
             self.db.query(Lote)
-            .filter(Lote.producto_id == producto_id)
+            .filter(Lote.producto_id == uid)
             .filter(Lote.fecha_vencimiento >= date.today())
             .order_by(Lote.fecha_vencimiento.asc())
             .first()
@@ -178,14 +216,20 @@ class PresentacionRepositorio:
         self.db = db
 
     def listar_por_producto(self, producto_id: str) -> list:
+        uid = _to_uuid(producto_id)
+        if uid is None:
+            return []
         return (
             self.db.query(Presentacion)
-            .filter(Presentacion.producto_id == producto_id)
+            .filter(Presentacion.producto_id == uid)
             .all()
         )
 
     def buscar_por_id(self, presentacion_id: str):
-        return self.db.query(Presentacion).filter(Presentacion.id == presentacion_id).first()
+        uid = _to_uuid(presentacion_id)
+        if uid is None:
+            return None
+        return self.db.query(Presentacion).filter(Presentacion.id == uid).first()
 
     def actualizar(self, presentacion: Presentacion, campos: dict) -> Presentacion:
         for campo, valor in campos.items():

@@ -263,6 +263,65 @@ class ProductoService:
         campos = {k: v for k, v in datos.items() if v is not None}
         return self.presentacion_repo.actualizar(presentacion, campos)
 
+    # ── HU-PROD-03: Inventario FEFO ───────────────────────────────────────
+
+    def verificar_stock_disponible(self, producto_id: str, cantidad_solicitada: int) -> None:
+        """
+        Llamado por CarritoService antes de agregar un producto al carrito.
+        Lanza ValueError con código INSUFFICIENT_STOCK si el stock no alcanza.
+        El mensaje incluye el stock real y el nombre del producto para que
+        CarritoService pueda armar la respuesta HTTP 400 con detalle.
+        """
+        producto = self.producto_repo.buscar_por_id(producto_id)
+        if not producto:
+            raise LookupError("PRODUCT_NOT_FOUND")
+        if producto.stock < cantidad_solicitada:
+            raise ValueError(f"INSUFFICIENT_STOCK|{producto.stock}|{producto.nombre}")
+
+    def descontar_stock_fefo(self, producto_id: str, cantidad_a_descontar: int) -> None:
+        """
+        Llamado por PedidoService al confirmar un pedido, dentro de una
+        transacción única que abarca todos los ítems del pedido.
+
+        Descuenta 'cantidad_a_descontar' del producto comenzando por el lote
+        con fecha_vencimiento más próxima (FEFO). Si ese lote no alcanza,
+        continúa con el siguiente en orden de vencimiento.
+
+        Tras el descuento recalcula el stock total del producto sumando las
+        cantidades reales de todos sus lotes, y desactiva el producto si el
+        stock llega a cero.
+
+        Los updates de lotes usan flush() (sin commit) para que todo quede
+        dentro de la misma transacción. El commit final lo hace el actualizar()
+        del producto al terminar, garantizando atomicidad: si cualquier paso
+        falla, ningún lote ni el producto quedan modificados.
+        """
+        producto = self.producto_repo.buscar_por_id(producto_id)
+        if not producto:
+            raise LookupError("PRODUCT_NOT_FOUND")
+
+        if producto.stock < cantidad_a_descontar:
+            raise ValueError(f"INSUFFICIENT_STOCK|{producto.stock}|{producto.nombre}")
+
+        lotes = self.lote_repo.listar_con_stock_por_producto(str(producto.id))
+
+        restante = cantidad_a_descontar
+        for lote in lotes:
+            if restante <= 0:
+                break
+            descontar = min(lote.cantidad, restante)
+            self.lote_repo.actualizar_cantidad(lote, lote.cantidad - descontar)
+            restante -= descontar
+
+        # Recalcula el stock sumando las cantidades reales de todos los lotes
+        # (incluyendo los que acaban de ser modificados vía flush)
+        todos_los_lotes = self.lote_repo.listar_por_producto(str(producto.id))
+        nuevo_stock = sum(l.cantidad for l in todos_los_lotes)
+        activo = nuevo_stock > 0
+
+        # actualizar() hace el commit final — cierra la transacción completa
+        self.producto_repo.actualizar(producto, {"stock": nuevo_stock, "activo": activo})
+
     def crear_categoria(self, datos: dict, solicitante_rol: str) -> Categoria:
         """Crea una nueva categoría de productos. Solo admin."""
 

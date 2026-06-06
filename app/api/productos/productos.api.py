@@ -6,6 +6,7 @@
 # No contiene reglas de negocio ni accede directamente a la BD.
 # ─────────────────────────────────────────────────────────────────────────────
 
+import uuid
 from datetime import date, datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -155,6 +156,14 @@ def consultar_producto(producto_id: str, db: Session = Depends(get_db)):
     peticiones públicas (clientes). Endpoint público — no requiere autenticación.
     Pendiente: conectar JWT para que administradores puedan ver productos inactivos.
     """
+    try:
+        uuid.UUID(producto_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_formato_error(400, "ID de producto inválido", "INVALID_ID_FORMAT",
+                                  "El ID del producto seleccionado no es válido. Verifica que el enlace o la referencia al producto sea correcta"),
+        )
     try:
         service = ProductoService(db)
         # Sin JWT: toda petición se trata como pública (es_admin=False)
