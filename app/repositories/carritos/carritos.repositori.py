@@ -1,19 +1,15 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from decimal import Decimal
-import importlib.util, os
-
-_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "domain", "carritos", "carritos.domain.py"))
-_spec = importlib.util.spec_from_file_location("carritos_domain", _path)
-_mod  = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
-Carrito     = _mod.Carrito
-ItemCarrito = _mod.ItemCarrito
+from app.domain.carritos import Carrito, ItemCarrito
 
 
 class CarritoRepositorio:
     def __init__(self, db: Session):
         self.db = db
+
+    def buscar_por_id(self, carrito_id) -> Carrito:
+        return self.db.query(Carrito).filter(Carrito.id == carrito_id).first()
 
     def buscar_activo_por_usuario_id(self, usuario_id):
         return (
@@ -21,6 +17,12 @@ class CarritoRepositorio:
             .filter(Carrito.usuario_id == usuario_id, Carrito.activo == True)
             .first()
         )
+
+    def buscar_activo_por_usuario(self, usuario_id) -> Carrito:
+        return self.db.query(Carrito).filter(
+            Carrito.usuario_id == usuario_id,
+            Carrito.activo == True
+        ).first()
 
     def guardar(self, carrito: Carrito) -> Carrito:
         self.db.add(carrito)
@@ -36,10 +38,21 @@ class CarritoRepositorio:
         self.db.refresh(carrito)
         return carrito
 
+    def desactivar(self, carrito_id) -> None:
+        carrito = self.db.query(Carrito).filter(Carrito.id == carrito_id).first()
+        if carrito:
+            carrito.activo = False
+            self.db.flush()
+
 
 class ItemCarritoRepositorio:
     def __init__(self, db: Session):
         self.db = db
+
+    def buscar_por_carrito_id(self, carrito_id) -> list:
+        return self.db.query(ItemCarrito).filter(
+            ItemCarrito.carrito_id == carrito_id
+        ).all()
 
     def buscar_por_carrito_y_producto(self, carrito_id, producto_id):
         return (

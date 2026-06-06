@@ -1,3 +1,7 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CAPA: DOMAIN – Módulo de Usuarios
+# ─────────────────────────────────────────────────────────────────────────────
+
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey

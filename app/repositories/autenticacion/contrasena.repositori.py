@@ -1,3 +1,7 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CAPA: REPOSITORY – Historial de Contraseñas
+# ─────────────────────────────────────────────────────────────────────────────
+
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 import uuid

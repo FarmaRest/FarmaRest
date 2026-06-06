@@ -29,12 +29,7 @@ _mod_usr = importlib.util.module_from_spec(_spec_usr)
 _spec_usr.loader.exec_module(_mod_usr)
 UsuarioRepositorio = _mod_usr.UsuarioRepositorio
 
-# Cargar modelo Sesion
-_path_dom = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "domain", "autenticacion", "autenticacion.domain.py"))
-_spec_dom = importlib.util.spec_from_file_location("autenticacion_domain", _path_dom)
-_mod_dom = importlib.util.module_from_spec(_spec_dom)
-_spec_dom.loader.exec_module(_mod_dom)
-Sesion = _mod_dom.Sesion
+from app.domain.autenticacion import Sesion
 
 SECRET_KEY = os.getenv("SECRET_KEY", "cambia-este-valor-en-produccion")
 ALGORITHM = "HS256"

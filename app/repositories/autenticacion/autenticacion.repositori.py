@@ -1,12 +1,6 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
-import importlib.util, os, uuid
-
-_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "domain", "autenticacion", "autenticacion.domain.py"))
-_spec = importlib.util.spec_from_file_location("autenticacion_domain", _path)
-_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
-Sesion = _mod.Sesion
+from app.domain.autenticacion import Sesion
 
 
 class AutenticacionRepositorio:
