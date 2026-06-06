@@ -23,6 +23,14 @@ ItemCarritoRepositorio = _mod_car.ItemCarritoRepositorio
 from app.domain.pedidos import Pedido, ItemPedido
 
 MONTO_MINIMO = 20000
+ESTADOS_VALIDOS = ["pendiente", "pagado", "en_preparacion", "enviado", "entregado"]
+FLUJO_ESTADOS = {
+    "pendiente":      "pagado",
+    "pagado":         "en_preparacion",
+    "en_preparacion": "enviado",
+    "enviado":        "entregado"
+}
+ESTADOS_NO_CANCELABLES = ["en_preparacion", "enviado", "entregado"]
 
 
 class PedidoService:
@@ -207,5 +215,69 @@ class PedidoService:
                 "totalIva": float(pedido.total_iva),
                 "total": float(pedido.total),
                 "fechaCreacion": pedido.fecha_creacion.isoformat()
+            }
+        }
+
+    def actualizar_estado(self, pedido_id, nuevo_estado: str, rol: str) -> dict:
+        ahora = datetime.now(timezone.utc)
+
+        if rol != "administrador":
+            raise HTTPException(status_code=403, detail={
+                "success": False, "statusCode": 403,
+                "message": "Acceso denegado",
+                "error": {"error_code": "FORBIDDEN",
+                          "details": "Solo un administrador puede actualizar el estado del pedido.",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        if nuevo_estado not in ESTADOS_VALIDOS and nuevo_estado != "cancelado":
+            raise HTTPException(status_code=400, detail={
+                "success": False, "statusCode": 400,
+                "message": "El estado proporcionado no es válido",
+                "error": {"error_code": "INVALID_ORDER_STATUS",
+                          "details": "Los estados válidos son: pendiente, pagado, en_preparacion, enviado, entregado",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        pedido = self.pedido_repo.buscar_por_id(pedido_id)
+        if not pedido:
+            raise HTTPException(status_code=404, detail={
+                "success": False, "statusCode": 404,
+                "message": "Pedido no encontrado",
+                "error": {"error_code": "ORDER_NOT_FOUND",
+                          "details": "No existe un pedido con el ID proporcionado",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        if nuevo_estado == "cancelado":
+            if pedido.estado in ESTADOS_NO_CANCELABLES:
+                raise HTTPException(status_code=409, detail={
+                    "success": False, "statusCode": 409,
+                    "message": "El pedido no puede cancelarse en su estado actual",
+                    "error": {"error_code": "ORDER_CANCELLATION_BLOCKED",
+                              "details": "Una vez que el pedido está en preparación o en un estado posterior, no puede cancelarse.",
+                              "timestamp": ahora.isoformat()}
+                })
+        else:
+            siguiente_valido = FLUJO_ESTADOS.get(pedido.estado)
+            if nuevo_estado != siguiente_valido:
+                raise HTTPException(status_code=409, detail={
+                    "success": False, "statusCode": 409,
+                    "message": "Transición de estado no permitida",
+                    "error": {"error_code": "INVALID_STATE_TRANSITION",
+                              "details": f"El pedido está en estado '{pedido.estado}'. El único siguiente estado válido es '{siguiente_valido}'.",
+                              "timestamp": ahora.isoformat()}
+                })
+
+        pedido_actualizado = self.pedido_repo.actualizar_estado(pedido, nuevo_estado)
+
+        return {
+            "success": True,
+            "statusCode": 200,
+            "message": "Estado del pedido actualizado correctamente",
+            "data": {
+                "pedidoId": str(pedido_actualizado.id),
+                "estado": pedido_actualizado.estado,
+                "fechaActualizacion": pedido_actualizado.fecha_actualizacion.isoformat()
             }
         }

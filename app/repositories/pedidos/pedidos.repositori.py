@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 from app.domain.pedidos import Pedido, ItemPedido
 
 
@@ -21,6 +22,13 @@ class PedidoRepositorio:
 
     def listar_todos(self) -> list:
         return self.db.query(Pedido).order_by(Pedido.fecha_creacion.desc()).all()
+
+    def actualizar_estado(self, pedido: Pedido, nuevo_estado: str) -> Pedido:
+        pedido.estado = nuevo_estado
+        pedido.fecha_actualizacion = datetime.now(timezone.utc)
+        self.db.commit()
+        self.db.refresh(pedido)
+        return pedido
 
 
 class ItemPedidoRepositorio:

@@ -5,6 +5,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 import importlib.util, os
 from uuid import UUID
 
@@ -32,6 +33,10 @@ _spec_svc.loader.exec_module(_mod_svc)
 PedidoService = _mod_svc.PedidoService
 
 router = APIRouter(prefix="/pedidos", tags=["Pedidos"])
+
+
+class ActualizarEstadoRequest(BaseModel):
+    estado: str
 
 
 @router.post("", status_code=201)
@@ -72,5 +77,20 @@ def consultar_pedido(
     return servicio.consultar_por_id(
         pedido_id=pedido_id,
         usuario_id=usuario_actual.id,
+        rol=usuario_actual.rol
+    )
+
+
+@router.patch("/{pedido_id}")
+def actualizar_estado(
+    pedido_id: UUID,
+    body: ActualizarEstadoRequest,
+    db: Session = Depends(get_db),
+    usuario_actual = Depends(get_usuario_actual)
+):
+    servicio = PedidoService(db)
+    return servicio.actualizar_estado(
+        pedido_id=pedido_id,
+        nuevo_estado=body.estado,
         rol=usuario_actual.rol
     )
