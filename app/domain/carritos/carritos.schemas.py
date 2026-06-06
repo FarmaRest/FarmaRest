@@ -13,6 +13,7 @@ class ItemCarritoOut(BaseModel):
     id: UUID4
     carrito_id: UUID4
     producto_id: UUID4
+    nombre: str | None = None
     cantidad: int
     precio_unitario: Decimal
     iva_unitario: Decimal
