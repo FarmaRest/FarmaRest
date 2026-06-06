@@ -1,9 +1,12 @@
-import importlib.util, pathlib
+import importlib.util, pathlib, sys
 
-_path = pathlib.Path(__file__).parent / "pagos.domain.py"
-_spec = importlib.util.spec_from_file_location("pagos_domain", _path)
-_mod  = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
+_KEY = "pagos_domain"
+if _KEY not in sys.modules:
+    _path = pathlib.Path(__file__).parent / "pagos.domain.py"
+    _spec = importlib.util.spec_from_file_location(_KEY, _path)
+    _mod  = importlib.util.module_from_spec(_spec)
+    sys.modules[_KEY] = _mod
+    _spec.loader.exec_module(_mod)
 
-Pago    = _mod.Pago
-Factura = _mod.Factura
+Pago    = sys.modules[_KEY].Pago
+Factura = sys.modules[_KEY].Factura

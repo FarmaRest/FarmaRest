@@ -1,24 +1,26 @@
 from sqlalchemy.orm import Session
 from decimal import Decimal
 import uuid
-import importlib.util, os
+import importlib.util, os, sys
 
 def _load(rel_path, name):
+    if name in sys.modules:
+        return sys.modules[name]
     path = os.path.abspath(os.path.join(os.path.dirname(__file__), rel_path))
     spec = importlib.util.spec_from_file_location(name, path)
     mod  = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
     spec.loader.exec_module(mod)
     return mod
 
+from app.domain.carritos import Carrito, ItemCarrito
+
 _repo_mod    = _load("../../repositories/carritos/carritos.repositori.py",  "carritos_repo")
 _prod_mod    = _load("../../repositories/productos/productos.respositori.py", "productos_repo")
-_domain_mod  = _load("../../domain/carritos/carritos.domain.py", "carritos_domain")
 
 CarritoRepositorio     = _repo_mod.CarritoRepositorio
 ItemCarritoRepositorio = _repo_mod.ItemCarritoRepositorio
 ProductoRepositorio    = _prod_mod.ProductoRepositorio
-Carrito                = _domain_mod.Carrito
-ItemCarrito            = _domain_mod.ItemCarrito
 
 MAX_UNIDADES_POR_PRODUCTO = 20
 MIN_PRODUCTOS_DISTINTOS   = 2
