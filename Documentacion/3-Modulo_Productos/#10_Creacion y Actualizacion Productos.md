@@ -1,4 +1,4 @@
-# [HU-PROD-02] Creación y Actualización de Productos con Reglas de Vencimiento
+ñ# [HU-PROD-02] Creación y Actualización de Productos con Reglas de Vencimiento
 
 ## 📖 Historia de Usuario
 

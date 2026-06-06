@@ -148,6 +148,10 @@ class UsuarioService:
         if not usuario:
             raise LookupError("USER_NOT_FOUND")
 
+        # Regla: el nuevo correo no puede estar en uso por otro usuario
+        if self.repo.buscar_por_correo(nuevo_correo):
+            raise ValueError("EMAIL_ALREADY_EXISTS")
+
         historial_repo = HistorialCorreoRepositorio(db)
         ultimo = historial_repo.ultimo_cambio(usuario_id)
 
@@ -156,12 +160,7 @@ class UsuarioService:
             seis_meses = timedelta(days=182)
             proximo_cambio = ultimo.fecha_cambio + seis_meses
             if datetime.now(timezone.utc) < proximo_cambio:
-                # Se pasa la fecha del próximo cambio permitido en el error
                 raise ValueError(f"EMAIL_CHANGE_RESTRICTED:{proximo_cambio.date().isoformat()}")
-
-        # Regla: el nuevo correo no puede estar en uso por otro usuario
-        if self.repo.buscar_por_correo(nuevo_correo):
-            raise ValueError("EMAIL_ALREADY_EXISTS")
 
         # Antes de cambiar, se guarda el correo anterior en el historial
         historial_repo.guardar(HistorialCorreo(
