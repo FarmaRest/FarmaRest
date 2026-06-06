@@ -6,6 +6,7 @@ import bcrypt
 import os
 import importlib.util
 import uuid
+import re
 
 # Cargar repositorio de autenticacion
 _path_repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "repositories", "autenticacion", "autenticacion.repositori.py"))
@@ -13,6 +14,13 @@ _spec_repo = importlib.util.spec_from_file_location("autenticacion_repositori", 
 _mod_repo = importlib.util.module_from_spec(_spec_repo)
 _spec_repo.loader.exec_module(_mod_repo)
 AutenticacionRepositorio = _mod_repo.AutenticacionRepositorio
+
+# Cargar repositorio de contrasenas
+_path_cont = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "repositories", "autenticacion", "contrasena.repositori.py"))
+_spec_cont = importlib.util.spec_from_file_location("contrasena_repositori", _path_cont)
+_mod_cont = importlib.util.module_from_spec(_spec_cont)
+_spec_cont.loader.exec_module(_mod_cont)
+HistorialContrasenaRepositorio = _mod_cont.HistorialContrasenaRepositorio
 
 # Cargar repositorio de usuarios
 _path_usr = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "repositories", "usuarios", "usuarios.repositori.py"))
@@ -32,6 +40,20 @@ SECRET_KEY = os.getenv("SECRET_KEY", "cambia-este-valor-en-produccion")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+PASSWORD_EXPIRE_DAYS = 45
+PASSWORD_WARNING_DAYS = 5
+
+
+def validar_contrasena_fuerte(contrasena: str) -> bool:
+    if len(contrasena) < 8:
+        return False
+    if not re.search(r'[A-Z]', contrasena):
+        return False
+    if not re.search(r'[0-9]', contrasena):
+        return False
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', contrasena):
+        return False
+    return True
 
 
 class AutenticacionService:
@@ -39,6 +61,7 @@ class AutenticacionService:
         self.db = db
         self.repo = AutenticacionRepositorio(db)
         self.usuario_repo = UsuarioRepositorio(db)
+        self.historial_repo = HistorialContrasenaRepositorio(db)
 
     def login(self, correo: str, contrasena: str) -> dict:
         usuario = self.usuario_repo.buscar_por_correo(correo)
@@ -72,6 +95,27 @@ class AutenticacionService:
                     "message": "El correo o la contraseña ingresados son incorrectos"
                 }
             })
+
+        # Validacion de contrasena vencida para administradores
+        advertencia = None
+        if usuario.rol == "administrador" and usuario.fecha_cambio_contrasena:
+            ahora = datetime.now(timezone.utc)
+            dias_desde_cambio = (ahora - usuario.fecha_cambio_contrasena).days
+            dias_restantes = PASSWORD_EXPIRE_DAYS - dias_desde_cambio
+
+            if dias_desde_cambio > PASSWORD_EXPIRE_DAYS:
+                raise HTTPException(status_code=403, detail={
+                    "success": False,
+                    "statusCode": 403,
+                    "message": "Tu contraseña ha vencido. Debes cambiarla para continuar.",
+                    "error": {
+                        "error_code": "PASSWORD_EXPIRED",
+                        "details": "Las contraseñas de administrador deben cambiarse cada 45 días. Usa el endpoint PATCH /api/v1/auth/cambiar-contrasena para actualizarla."
+                    }
+                })
+            elif dias_restantes <= PASSWORD_WARNING_DAYS:
+                advertencia = f"Tu contraseña vence en {dias_restantes} días. Cámbiala pronto para evitar bloqueos."
+
         ahora = datetime.now(timezone.utc)
         fecha_exp_access = ahora + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         fecha_exp_refresh = ahora + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
@@ -90,7 +134,7 @@ class AutenticacionService:
         )
         self.repo.guardar(sesion)
 
-        return {
+        respuesta = {
             "success": True,
             "statusCode": 200,
             "message": "Inicio de sesión exitoso",
@@ -104,6 +148,9 @@ class AutenticacionService:
                 "expiresIn": 3600
             }
         }
+        if advertencia:
+            respuesta["data"]["advertencia"] = advertencia
+        return respuesta
 
     def logout(self, refresh_token: str) -> dict:
         sesion = self.repo.buscar_por_refresh_token(refresh_token)
@@ -134,7 +181,7 @@ class AutenticacionService:
                 "message": "El refresh token ha expirado. Debe iniciar sesión nuevamente.",
                 "error": {
                     "error_code": "REFRESH_TOKEN_EXPIRED",
-                    "details": "El refresh token no es válido o ya expiró. Solicite un nuevo inicio de sesión."
+                    "details": "El refresh token no es válido o ya expiró."
                 }
             })
         ahora = datetime.now(timezone.utc)
@@ -145,13 +192,12 @@ class AutenticacionService:
                 "message": "El refresh token ha expirado. Debe iniciar sesión nuevamente.",
                 "error": {
                     "error_code": "REFRESH_TOKEN_EXPIRED",
-                    "details": "El refresh token no es válido o ya expiró. Solicite un nuevo inicio de sesión."
+                    "details": "El refresh token no es válido o ya expiró."
                 }
             })
         fecha_exp_access = ahora + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         nuevo_access_token = jwt.encode({"sub": str(sesion.usuario_id), "exp": fecha_exp_access}, SECRET_KEY, algorithm=ALGORITHM)
         self.repo.actualizar_access_token(sesion.id, nuevo_access_token, fecha_exp_access)
-
         return {
             "success": True,
             "statusCode": 200,
@@ -159,5 +205,67 @@ class AutenticacionService:
             "data": {
                 "accessToken": nuevo_access_token,
                 "expiresIn": 3600
+            }
+        }
+
+    def cambiar_contrasena(self, correo: str, contrasena_actual: str, contrasena_nueva: str) -> dict:
+        usuario = self.usuario_repo.buscar_por_correo(correo)
+        if not usuario:
+            raise HTTPException(status_code=404, detail={
+                "success": False,
+                "statusCode": 404,
+                "message": "Usuario no encontrado",
+                "error": {"error_code": "USER_NOT_FOUND"}
+            })
+
+        if not bcrypt.checkpw(contrasena_actual.encode("utf-8"), usuario.hash_contrasena.encode("utf-8")):
+            raise HTTPException(status_code=401, detail={
+                "success": False,
+                "statusCode": 401,
+                "message": "La contraseña actual es incorrecta",
+                "error": {
+                    "error_code": "INVALID_CURRENT_PASSWORD",
+                    "details": "La contraseña actual ingresada no coincide con la registrada en el sistema"
+                }
+            })
+
+        if not validar_contrasena_fuerte(contrasena_nueva):
+            raise HTTPException(status_code=400, detail={
+                "success": False,
+                "statusCode": 400,
+                "message": "La nueva contraseña no cumple los requisitos mínimos de seguridad",
+                "error": {
+                    "error_code": "WEAK_PASSWORD",
+                    "details": "La contraseña debe tener mínimo 8 caracteres, al menos una mayúscula, un número y un carácter especial."
+                }
+            })
+
+        historiales = self.historial_repo.buscar_por_usuario_id(usuario.id)
+        for h in historiales:
+            if bcrypt.checkpw(contrasena_nueva.encode("utf-8"), h.hash_contrasena.encode("utf-8")):
+                raise HTTPException(status_code=400, detail={
+                    "success": False,
+                    "statusCode": 400,
+                    "message": "No puede reutilizar una contraseña anterior",
+                    "error": {
+                        "error_code": "PASSWORD_REUSE_NOT_ALLOWED",
+                        "details": "La contraseña ingresada ya fue utilizada anteriormente."
+                    }
+                })
+
+        hash_anterior = usuario.hash_contrasena
+        nuevo_hash = bcrypt.hashpw(contrasena_nueva.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        ahora = datetime.now(timezone.utc)
+        self.usuario_repo.actualizar_contrasena(usuario, nuevo_hash, ahora)
+        self.historial_repo.guardar(usuario.id, hash_anterior)
+
+        return {
+            "success": True,
+            "statusCode": 200,
+            "message": "Contraseña actualizada correctamente. Ya puedes iniciar sesión.",
+            "data": {
+                "usuarioId": str(usuario.id),
+                "correo": usuario.correo,
+                "fechaCambioContrasena": ahora.isoformat()
             }
         }
