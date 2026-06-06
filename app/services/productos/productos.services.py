@@ -188,6 +188,20 @@ class ProductoService:
     # Fuera del alcance estricto de la HU-PROD-02, pero necesario para que
     # el admin pueda poblar los catálogos desde Swagger sin tocar SQL a mano
 
+    def consultar_catalogo(self, categoria: str = None, laboratorio: str = None) -> list:
+        return self.producto_repo.listar_activos(
+            categoria_codigo=categoria, laboratorio_nombre=laboratorio
+        )
+
+    def consultar_por_id(self, producto_id: str, es_admin: bool = False):
+        producto = self.producto_repo.buscar_por_id(producto_id)
+        if not producto:
+            raise LookupError("PRODUCT_NOT_FOUND")
+        # Los clientes no pueden ver productos inactivos — ni saber que existen
+        if not producto.activo and not es_admin:
+            raise LookupError("PRODUCT_NOT_FOUND")
+        return producto
+
     def listar_categorias(self) -> list:
         return self.categoria_repo.listar_todas()
 

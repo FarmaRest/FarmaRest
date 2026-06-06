@@ -7,7 +7,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from datetime import date
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.domain.productos import (
     Categoria, Laboratorio, Producto, Lote, Presentacion,
 )
@@ -82,6 +82,28 @@ class ProductoRepositorio:
         # Busca un producto por UUID. Retorna None si no existe.
         # Se usa antes de actualizar para devolver 404 limpio
         return self.db.query(Producto).filter(Producto.id == producto_id).first()
+
+    def listar_activos(self, categoria_codigo: str = None, laboratorio_nombre: str = None) -> list:
+        # joinedload carga categoria, laboratorio y presentaciones en una sola
+        # query con LEFT OUTER JOIN, evitando el problema N+1 al serializar la lista
+        query = (
+            self.db.query(Producto)
+            .options(
+                joinedload(Producto.categoria),
+                joinedload(Producto.laboratorio),
+                joinedload(Producto.presentaciones),
+            )
+            .filter(Producto.activo == True)
+        )
+        if categoria_codigo:
+            query = query.join(Categoria, Producto.categoria_id == Categoria.id).filter(
+                Categoria.codigo == categoria_codigo
+            )
+        if laboratorio_nombre:
+            query = query.join(Laboratorio, Producto.laboratorio_id == Laboratorio.id).filter(
+                Laboratorio.nombre == laboratorio_nombre
+            )
+        return query.all()
 
     def guardar(self, producto: Producto) -> Producto:
         # Inserta el nuevo producto y refresca para obtener id y fecha_registro
