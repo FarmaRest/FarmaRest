@@ -20,6 +20,9 @@ ProductoRepositorio    = _prod_mod.ProductoRepositorio
 Carrito                = _domain_mod.Carrito
 ItemCarrito            = _domain_mod.ItemCarrito
 
+MAX_UNIDADES_POR_PRODUCTO = 20
+MIN_PRODUCTOS_DISTINTOS   = 2
+
 
 class CarritoService:
     def __init__(self, db: Session):
@@ -81,11 +84,21 @@ class CarritoService:
         item_existente = self.items.buscar_por_carrito_y_producto(carrito.id, producto.id)
         if item_existente:
             nueva_cantidad = item_existente.cantidad + cantidad
+            if nueva_cantidad > MAX_UNIDADES_POR_PRODUCTO:
+                raise ValueError(
+                    f"MAX_UNITS_EXCEEDED|No se pueden agregar más de {MAX_UNIDADES_POR_PRODUCTO} unidades del mismo producto por carrito. "
+                    f"Actualmente tienes {item_existente.cantidad} unidades de {producto.nombre}."
+                )
             if producto.stock < nueva_cantidad:
                 raise ValueError(f"INSUFFICIENT_STOCK|Solo hay {producto.stock} unidades disponibles del producto {producto.nombre}.")
             nuevo_subtotal = Decimal(str(nueva_cantidad)) * (precio_unitario + iva_unitario)
             self.items.actualizar_cantidad(item_existente, nueva_cantidad, nuevo_subtotal)
         else:
+            if cantidad > MAX_UNIDADES_POR_PRODUCTO:
+                raise ValueError(
+                    f"MAX_UNITS_EXCEEDED|No se pueden agregar más de {MAX_UNIDADES_POR_PRODUCTO} unidades del mismo producto por carrito. "
+                    f"Actualmente tienes 0 unidades de {producto.nombre}."
+                )
             subtotal = Decimal(str(cantidad)) * (precio_unitario + iva_unitario)
             nuevo_item = ItemCarrito(
                 carrito_id      = carrito.id,
@@ -113,6 +126,11 @@ class CarritoService:
             raise LookupError("CART_ITEM_NOT_FOUND|No existe un ítem con el ID proporcionado en tu carrito activo.")
 
         producto = self.productos.buscar_por_id(str(item.producto_id))
+        if cantidad > MAX_UNIDADES_POR_PRODUCTO:
+            raise ValueError(
+                f"MAX_UNITS_EXCEEDED|No se pueden agregar más de {MAX_UNIDADES_POR_PRODUCTO} unidades del mismo producto por carrito. "
+                f"Actualmente tienes {item.cantidad} unidades de {producto.nombre}."
+            )
         if producto.stock < cantidad:
             raise ValueError(f"INSUFFICIENT_STOCK|Solo hay {producto.stock} unidades disponibles del producto {producto.nombre}.")
 
@@ -123,6 +141,17 @@ class CarritoService:
         self.db.refresh(carrito)
         carrito = self._recalcular_totales(carrito)
         return self._serializar_carrito(carrito)
+
+    def validar_minimo_productos(self, usuario_id: str) -> None:
+        carrito = self.carritos.buscar_activo_por_usuario_id(usuario_id)
+        if not carrito:
+            raise ValueError("MIN_PRODUCTS_NOT_MET|El carrito debe contener al menos 2 productos diferentes para poder crear un pedido. Actualmente tienes 0 productos diferentes.")
+        total_distintos = self.items.contar_productos_distintos(carrito.id)
+        if total_distintos < MIN_PRODUCTOS_DISTINTOS:
+            raise ValueError(
+                f"MIN_PRODUCTS_NOT_MET|El carrito debe contener al menos {MIN_PRODUCTOS_DISTINTOS} productos diferentes para poder crear un pedido. "
+                f"Actualmente tienes {total_distintos} producto{'s diferentes' if total_distintos != 1 else ' diferente'}."
+            )
 
     def eliminar_item(self, usuario_id: str, item_id: str) -> None:
         item = self.items.buscar_por_id_y_usuario(item_id, usuario_id)

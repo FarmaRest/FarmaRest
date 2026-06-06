@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from decimal import Decimal
 import importlib.util, os
 
@@ -71,6 +72,13 @@ class ItemCarritoRepositorio:
         self.db.commit()
         self.db.refresh(item)
         return item
+
+    def contar_productos_distintos(self, carrito_id) -> int:
+        return (
+            self.db.query(func.count(ItemCarrito.id))
+            .filter(ItemCarrito.carrito_id == carrito_id)
+            .scalar()
+        )
 
     def eliminar(self, item: ItemCarrito) -> None:
         self.db.delete(item)
