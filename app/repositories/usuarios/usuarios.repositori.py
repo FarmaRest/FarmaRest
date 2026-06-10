@@ -19,6 +19,9 @@ class UsuarioRepositorio:
     def buscar_por_id(self, usuario_id: str):
         return self.db.query(Usuario).filter(Usuario.id == usuario_id).first()
 
+    def buscar_por_cedula(self, cedula: str):
+        return self.db.query(Usuario).filter(Usuario.cedula == cedula).first()
+
     def guardar(self, usuario: Usuario):
         self.db.add(usuario)
         self.db.commit()

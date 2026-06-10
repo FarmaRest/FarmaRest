@@ -13,6 +13,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.domain.usuarios import Usuario
 from app.services.productos import ProductoService
 
 # Prefijo base de las rutas de productos: /api/v1/productos
@@ -201,7 +203,11 @@ def consultar_producto(producto_id: str, db: Session = Depends(get_db)):
 # ─── HU-PROD-02: Registro de producto ────────────────────────────────────────
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def registrar_producto(body: ProductoIn, db: Session = Depends(get_db)):
+def registrar_producto(
+    body: ProductoIn,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     """
     Registra un nuevo producto en el catálogo junto con su lote inicial
     y sus presentaciones. Aplica las siguientes reglas:
@@ -210,13 +216,12 @@ def registrar_producto(body: ProductoIn, db: Session = Depends(get_db)):
     - categoría y laboratorio deben existir previamente
     - 'activo' se calcula automáticamente según stock y vencimiento
 
-    Pendiente: conectar JWT cuando la HU de autenticación esté lista.
+    Requiere token JWT de administrador en el header Authorization.
     """
     try:
         service = ProductoService(db)
-        # Sin JWT por ahora — rol admin hardcodeado hasta HU de autenticación
         producto, lote, categoria, laboratorio = service.registrar_producto(
-            body.model_dump(), solicitante_rol="admin"
+            body.model_dump(), solicitante_rol=current_user.rol
         )
 
         data = {
@@ -302,12 +307,15 @@ def listar_categorias(db: Session = Depends(get_db)):
 
 
 @router_categorias.post("", status_code=status.HTTP_201_CREATED)
-def crear_categoria(body: CategoriaCreate, db: Session = Depends(get_db)):
+def crear_categoria(
+    body: CategoriaCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     """Crea una nueva categoría de productos. Solo administrador."""
     try:
         service = ProductoService(db)
-        # Sin JWT por ahora — rol admin hardcodeado hasta HU de autenticación
-        categoria = service.crear_categoria(body.model_dump(), solicitante_rol="admin")
+        categoria = service.crear_categoria(body.model_dump(), solicitante_rol=current_user.rol)
         data = {
             "id":     str(categoria.id),
             "nombre": categoria.nombre,
@@ -351,12 +359,15 @@ def listar_laboratorios(db: Session = Depends(get_db)):
 
 
 @router_laboratorios.post("", status_code=status.HTTP_201_CREATED)
-def crear_laboratorio(body: LaboratorioCreate, db: Session = Depends(get_db)):
+def crear_laboratorio(
+    body: LaboratorioCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     """Crea un nuevo laboratorio fabricante. Solo administrador."""
     try:
         service = ProductoService(db)
-        # Sin JWT por ahora — rol admin hardcodeado hasta HU de autenticación
-        laboratorio = service.crear_laboratorio(body.model_dump(), solicitante_rol="admin")
+        laboratorio = service.crear_laboratorio(body.model_dump(), solicitante_rol=current_user.rol)
         data = {
             "id":     str(laboratorio.id),
             "nombre": laboratorio.nombre,
@@ -385,7 +396,12 @@ def crear_laboratorio(body: LaboratorioCreate, db: Session = Depends(get_db)):
 # ─── HU-PROD-02: Actualización de producto ───────────────────────────────────
 
 @router.put("/{producto_id}", status_code=status.HTTP_200_OK)
-def actualizar_producto(producto_id: str, body: ProductoUpdate, db: Session = Depends(get_db)):
+def actualizar_producto(
+    producto_id: str,
+    body: ProductoUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     """
     Actualiza los campos modificables de un producto existente.
     Solo se modifican los campos enviados en el body. Si se actualiza
@@ -396,9 +412,8 @@ def actualizar_producto(producto_id: str, body: ProductoUpdate, db: Session = De
     """
     try:
         service = ProductoService(db)
-        # Sin JWT por ahora — rol admin hardcodeado hasta HU de autenticación
         producto = service.actualizar_producto(
-            producto_id, body.model_dump(exclude_none=True), solicitante_rol="admin"
+            producto_id, body.model_dump(exclude_none=True), solicitante_rol=current_user.rol
         )
 
         data = {
@@ -479,7 +494,12 @@ def listar_lotes(producto_id: str, db: Session = Depends(get_db)):
 
 
 @router_lotes.post("/{producto_id}", status_code=status.HTTP_201_CREATED)
-def agregar_lote(producto_id: str, body: LoteAdicionalIn, db: Session = Depends(get_db)):
+def agregar_lote(
+    producto_id: str,
+    body: LoteAdicionalIn,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     """
     Agrega un nuevo lote a un producto existente.
     Incrementa el stock del producto con la cantidad del lote y recalcula 'activo'.
@@ -488,7 +508,7 @@ def agregar_lote(producto_id: str, body: LoteAdicionalIn, db: Session = Depends(
     try:
         service = ProductoService(db)
         lote, producto = service.agregar_lote(
-            producto_id, body.model_dump(), solicitante_rol="admin"
+            producto_id, body.model_dump(), solicitante_rol=current_user.rol
         )
         data = {
             "id": str(lote.id),
@@ -566,12 +586,17 @@ def listar_presentaciones(producto_id: str, db: Session = Depends(get_db)):
 
 
 @router_presentaciones.put("/{presentacion_id}", status_code=status.HTTP_200_OK)
-def actualizar_presentacion(presentacion_id: str, body: PresentacionUpdate, db: Session = Depends(get_db)):
+def actualizar_presentacion(
+    presentacion_id: str,
+    body: PresentacionUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     """Actualiza los datos de una presentación existente (tipo, cantidad o unidad)."""
     try:
         service = ProductoService(db)
         presentacion = service.actualizar_presentacion(
-            presentacion_id, body.model_dump(exclude_none=True), solicitante_rol="admin"
+            presentacion_id, body.model_dump(exclude_none=True), solicitante_rol=current_user.rol
         )
         data = {
             "id": str(presentacion.id),

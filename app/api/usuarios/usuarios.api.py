@@ -128,6 +128,12 @@ def registrar_usuario(body: UsuarioIn, db: Session = Depends(get_db)):
                 detail=_formato_error(409, "Correo ya registrado", "EMAIL_ALREADY_EXISTS",
                                       f"El correo {body.correo} ya está asociado a una cuenta")
             )
+        if "CEDULA_ALREADY_EXISTS" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_formato_error(409, "Cédula ya registrada", "CEDULA_ALREADY_EXISTS",
+                                      f"La cédula {body.cedula} ya está asociada a una cuenta")
+            )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail=_formato_error(400, "Datos inválidos", "VALIDATION_ERROR", str(e)))
 
