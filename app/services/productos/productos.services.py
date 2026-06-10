@@ -317,10 +317,10 @@ class ProductoService:
         # (incluyendo los que acaban de ser modificados vía flush)
         todos_los_lotes = self.lote_repo.listar_por_producto(str(producto.id))
         nuevo_stock = sum(l.cantidad for l in todos_los_lotes)
-        activo = nuevo_stock > 0
 
-        # actualizar() hace el commit final — cierra la transacción completa
-        self.producto_repo.actualizar(producto, {"stock": nuevo_stock, "activo": activo})
+        producto.stock = nuevo_stock
+        producto.activo = nuevo_stock > 0
+        self.db.flush()
 
     def crear_categoria(self, datos: dict, solicitante_rol: str) -> Categoria:
         """Crea una nueva categoría de productos. Solo admin."""
