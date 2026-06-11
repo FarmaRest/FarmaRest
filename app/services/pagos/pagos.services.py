@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone, time
 from zoneinfo import ZoneInfo
 from fastapi import HTTPException
+import hashlib
 import importlib.util, os, uuid
 
 # Cargar repositorio de pagos
@@ -30,6 +31,8 @@ from app.domain.pagos import Pago
 HORA_INICIO_PERMITIDA = time(6, 0)   # 6:00 AM
 HORA_FIN_PERMITIDA    = time(23, 0)  # 11:00 PM
 ZONA_COLOMBIA         = ZoneInfo("America/Bogota")
+
+WOMPI_EVENTS_SECRET   = os.getenv("WOMPI_EVENTS_SECRET", "")
 
 
 class PagoService:
@@ -167,6 +170,98 @@ class PagoService:
             })
 
         return self._serializar_pago(pago, "Pago encontrado")
+
+    PROPIEDADES_A_CAMPOS = {
+        "transaction.id": "id",
+        "transaction.status": "status",
+        "transaction.amount_in_cents": "amount_in_cents",
+    }
+
+    def _calcular_checksum(self, data: dict, properties: list) -> str:
+        valores = "".join(str(data[self.PROPIEDADES_A_CAMPOS.get(campo, campo)]) for campo in properties)
+        cadena = f"{valores}{WOMPI_EVENTS_SECRET}"
+        return hashlib.sha256(cadena.encode("utf-8")).hexdigest()
+
+    def procesar_webhook(self, body: dict) -> dict:
+        ahora = datetime.now(timezone.utc)
+        data = body.get("data", {})
+        signature = body.get("signature", {})
+
+        checksum_recibido = signature.get("checksum", "")
+        checksum_esperado = self._calcular_checksum(data, signature.get("properties", []))
+
+        if checksum_recibido != checksum_esperado:
+            raise HTTPException(status_code=401, detail={
+                "success": False, "statusCode": 401,
+                "message": "Firma del webhook inválida",
+                "error": {"error_code": "INVALID_WEBHOOK_SIGNATURE",
+                          "details": "El checksum recibido no coincide con el esperado. La notificación fue descartada.",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        referencia = data.get("reference")
+        pago = self.pago_repo.buscar_por_referencia(referencia)
+        if not pago:
+            raise HTTPException(status_code=404, detail={
+                "success": False, "statusCode": 404,
+                "message": "Pago no encontrado",
+                "error": {"error_code": "PAYMENT_NOT_FOUND",
+                          "details": f"No existe un pago con la referencia {referencia}.",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        if data.get("amount_in_cents") != pago.monto_en_centavos:
+            raise HTTPException(status_code=401, detail={
+                "success": False, "statusCode": 401,
+                "message": "Firma del webhook inválida",
+                "error": {"error_code": "INVALID_WEBHOOK_SIGNATURE",
+                          "details": "El amount_in_cents recibido no coincide con el monto registrado para este pago.",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        nuevo_estado = data.get("status")
+        estado_pedido_actual = pago.pedido.estado
+
+        # Idempotencia: si el pago ya está en ese estado, no duplicar acciones
+        if pago.estado_transaccion == nuevo_estado:
+            return {
+                "success": True,
+                "statusCode": 200,
+                "message": "Webhook procesado correctamente.",
+                "data": {
+                    "pedidoId": str(pago.pedido_id),
+                    "idTransaccionWompi": pago.id_transaccion_wompi,
+                    "estadoTransaccion": pago.estado_transaccion,
+                    "estadoPedidoActualizado": estado_pedido_actual,
+                    "fechaProcesamiento": ahora.isoformat(),
+                }
+            }
+
+        pago = self.pago_repo.actualizar_desde_webhook(
+            pago,
+            estado_transaccion=nuevo_estado,
+            id_transaccion_wompi=data.get("id"),
+            metodo_pago=data.get("payment_method_type"),
+        )
+
+        estado_pedido_actualizado = pago.pedido.estado
+        if nuevo_estado == "APPROVED":
+            pedido = self.pedido_repo.buscar_por_id(pago.pedido_id)
+            pedido_actualizado = self.pedido_repo.actualizar_estado(pedido, "pagado")
+            estado_pedido_actualizado = pedido_actualizado.estado
+
+        return {
+            "success": True,
+            "statusCode": 200,
+            "message": "Webhook procesado correctamente. Estado del pedido actualizado." if nuevo_estado == "APPROVED" else "Webhook procesado correctamente.",
+            "data": {
+                "pedidoId": str(pago.pedido_id),
+                "idTransaccionWompi": pago.id_transaccion_wompi,
+                "estadoTransaccion": pago.estado_transaccion,
+                "estadoPedidoActualizado": estado_pedido_actualizado,
+                "fechaProcesamiento": ahora.isoformat(),
+            }
+        }
 
     def _serializar_pago(self, pago: Pago, mensaje: str) -> dict:
         return {

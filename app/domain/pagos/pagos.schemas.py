@@ -16,6 +16,26 @@ class PagoEntrada(BaseModel):
     correoCliente:   str = Field(..., max_length=200)
 
 
+class WompiSignature(BaseModel):
+    checksum:   str
+    properties: list[str]
+
+
+class WompiTransactionData(BaseModel):
+    id:                  str
+    reference:           str
+    status:              str
+    amount_in_cents:     int
+    currency:            str
+    payment_method_type: Optional[str] = None
+
+
+class WebhookWompiEntrada(BaseModel):
+    event:     str
+    data:      WompiTransactionData
+    signature: WompiSignature
+
+
 class PagoSalida(BaseModel):
     id:                   UUID4
     pedido_id:            UUID4

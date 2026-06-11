@@ -23,6 +23,7 @@ _spec_sch = importlib.util.spec_from_file_location("pagos_schemas", _path_sch)
 _mod_sch  = importlib.util.module_from_spec(_spec_sch)
 _spec_sch.loader.exec_module(_mod_sch)
 PagoEntrada = _mod_sch.PagoEntrada
+WebhookWompiEntrada = _mod_sch.WebhookWompiEntrada
 
 # Cargar servicio
 _path_svc = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "services", "pagos", "pagos.services.py"))
@@ -48,6 +49,15 @@ def iniciar_pago(
         moneda=body.moneda,
         correo_cliente=body.correoCliente,
     )
+
+
+@router.post("/webhook")
+def procesar_webhook_wompi(
+    body: WebhookWompiEntrada,
+    db: Session = Depends(get_db),
+):
+    servicio = PagoService(db)
+    return servicio.procesar_webhook(body.model_dump())
 
 
 @router.get("/referencia/{referencia}")

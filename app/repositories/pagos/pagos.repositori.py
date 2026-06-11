@@ -4,6 +4,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 from app.domain.pagos import Pago
 
 
@@ -24,3 +25,12 @@ class PagoRepositorio:
 
     def listar_todos(self) -> list:
         return self.db.query(Pago).order_by(Pago.fecha_creacion.desc()).all()
+
+    def actualizar_desde_webhook(self, pago: Pago, estado_transaccion: str, id_transaccion_wompi: str, metodo_pago: str) -> Pago:
+        pago.estado_transaccion = estado_transaccion
+        pago.id_transaccion_wompi = id_transaccion_wompi
+        pago.metodo_pago = metodo_pago
+        pago.fecha_actualizacion = datetime.now(timezone.utc)
+        self.db.commit()
+        self.db.refresh(pago)
+        return pago
