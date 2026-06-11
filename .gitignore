@@ -19,4 +19,4 @@ __pycache__/
 *.log
 *.err
 
-*.claude
+*.claudeapi-factus-v2.json

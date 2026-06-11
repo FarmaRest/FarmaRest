@@ -11,6 +11,7 @@ from app.api.productos import (
 from app.api.carritos import router as carritos_router
 from app.api.pedidos import router as pedidos_router
 from app.api.pagos import router as pagos_router
+from app.api.facturas import router as facturas_router
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(usuarios_router)
@@ -23,3 +24,4 @@ router.include_router(router_presentaciones)
 router.include_router(carritos_router)
 router.include_router(pedidos_router)
 router.include_router(pagos_router)
+router.include_router(facturas_router)
