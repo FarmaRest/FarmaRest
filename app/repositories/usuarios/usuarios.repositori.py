@@ -45,7 +45,8 @@ class UsuarioRepositorio:
         self.db.commit()
 
     def tiene_pedidos(self, usuario_id: str) -> bool:
-        return False
+        from app.domain.pedidos import Pedido
+        return self.db.query(Pedido).filter(Pedido.usuario_id == usuario_id).first() is not None
 
     def actualizar_estado(self, usuario: Usuario, nuevo_estado: str) -> Usuario:
         usuario.estado = nuevo_estado
