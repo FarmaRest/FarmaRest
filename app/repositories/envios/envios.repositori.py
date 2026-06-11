@@ -22,3 +22,6 @@ class EnvioRepositorio:
 
     def buscar_por_pedido_id(self, pedido_id) -> Envio:
         return self.db.query(Envio).filter(Envio.pedido_id == pedido_id).first()
+
+    def listar_todos(self) -> list[Envio]:
+        return self.db.query(Envio).all()

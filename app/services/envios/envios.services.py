@@ -106,6 +106,68 @@ class EnvioService:
 
         return self._serializar_envio(envio, "Envío registrado correctamente", 201)
 
+    def listar_envios(self) -> dict:
+        envios = self.envio_repo.listar_todos()
+        return {
+            "success": True,
+            "statusCode": 200,
+            "message": "Envíos obtenidos correctamente",
+            "data": [
+                {
+                    "envioId": str(envio.id),
+                    "pedidoId": str(envio.pedido_id),
+                    "estado": envio.estado,
+                    "empresaTransporte": envio.empresa_transporte,
+                    "fechaDespacho": envio.fecha_despacho.isoformat(),
+                }
+                for envio in envios
+            ]
+        }
+
+    def consultar_por_id(self, envio_id, usuario_id, rol) -> dict:
+        ahora = datetime.now(timezone.utc)
+
+        envio = self.envio_repo.buscar_por_id(envio_id)
+        if not envio:
+            raise HTTPException(status_code=404, detail={
+                "success": False, "statusCode": 404,
+                "message": "Envío no encontrado",
+                "error": {"error_code": "SHIPMENT_NOT_FOUND",
+                          "details": "No existe un envío con el ID o pedido proporcionado.",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        self._verificar_permiso(envio, usuario_id, rol, ahora)
+
+        return self._serializar_envio(envio, "Envío encontrado", 200)
+
+    def consultar_por_pedido_id(self, pedido_id, usuario_id, rol) -> dict:
+        ahora = datetime.now(timezone.utc)
+
+        envio = self.envio_repo.buscar_por_pedido_id(pedido_id)
+        if not envio:
+            raise HTTPException(status_code=404, detail={
+                "success": False, "statusCode": 404,
+                "message": "Envío no encontrado",
+                "error": {"error_code": "SHIPMENT_NOT_FOUND",
+                          "details": "No existe un envío con el ID o pedido proporcionado.",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        self._verificar_permiso(envio, usuario_id, rol, ahora)
+
+        return self._serializar_envio(envio, "Envío encontrado", 200)
+
+    def _verificar_permiso(self, envio: Envio, usuario_id, rol, ahora) -> None:
+        if rol != "administrador" and envio.usuario_id != usuario_id:
+            raise HTTPException(status_code=403, detail={
+                "success": False, "statusCode": 403,
+                "message": "Acceso denegado",
+                "error": {"error_code": "FORBIDDEN",
+                          "details": "No tiene permisos para consultar este envío.",
+                          "timestamp": ahora.isoformat()}
+            })
+
     def _serializar_envio(self, envio: Envio, mensaje: str, status_code: int) -> dict:
         return {
             "success": True,
