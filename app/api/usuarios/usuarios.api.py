@@ -492,3 +492,13 @@ def consultar_usuario(
             detail=_formato_error(404, "Usuario no encontrado", "USER_NOT_FOUND",
                                   "No existe un usuario con el ID proporcionado")
         )
+
+
+# ─── Test: disparar inactivación manual ──────────────────────────────────────
+
+@router.post("/admin/ejecutar-inactivacion", status_code=status.HTTP_200_OK)
+def ejecutar_inactivacion_manual(db: Session = Depends(get_db)):
+    from app.services.usuarios import InactivacionService
+    service = InactivacionService(db)
+    total = service.ejecutar()
+    return {"success": True, "message": f"Usuarios inactivados: {total}", "total": total}
