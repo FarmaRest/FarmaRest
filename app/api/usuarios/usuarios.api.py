@@ -146,18 +146,15 @@ def actualizar_usuario(
     usuario_id: str,
     body: UsuarioUpdate,
     db: Session = Depends(get_db),
-    solicitante_id: Optional[str] = None,
-    solicitante_rol: Optional[str] = "cliente",
+    usuario_actual=Depends(get_current_user),
 ):
     """
     Actualiza los datos personales de un usuario.
-    Solo se modifican los campos que vengan en el body.
-    Pendiente: reemplazar solicitante_id y solicitante_rol por JWT en HU de autenticación.
+    Requiere token JWT válido. Un cliente solo puede modificar su propio perfil.
     """
     try:
         service = UsuarioService(db)
-        sid = solicitante_id if solicitante_id else usuario_id
-        usuario = service.actualizar_usuario(usuario_id, body.model_dump(exclude_none=True), sid, solicitante_rol)
+        usuario = service.actualizar_usuario(usuario_id, body.model_dump(exclude_none=True), str(usuario_actual.id), usuario_actual.rol)
         data = {
             "id": str(usuario.id),
             "primer_nombre": usuario.primer_nombre,
@@ -200,17 +197,16 @@ def actualizar_usuario(
 def eliminar_usuario(
     usuario_id: str,
     db: Session = Depends(get_db),
-    solicitante_rol: Optional[str] = "cliente",
+    usuario_actual=Depends(get_current_user),
 ):
     """
     Elimina un usuario. Solo lo puede hacer un administrador.
     No se puede eliminar si tiene pedidos asociados.
     Retorna 204 (sin contenido en el body).
-    Pendiente: reemplazar solicitante_rol por JWT en HU de autenticación.
     """
     try:
         service = UsuarioService(db)
-        service.eliminar_usuario(usuario_id, solicitante_rol)
+        service.eliminar_usuario(usuario_id, usuario_actual.rol)
         return None
     except PermissionError:
         raise HTTPException(
