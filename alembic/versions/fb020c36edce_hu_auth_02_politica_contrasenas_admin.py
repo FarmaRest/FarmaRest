@@ -1,7 +1,7 @@
 """HU-AUTH-02-politica-contrasenas-admin
 
 Revision ID: fb020c36edce
-Revises: 109a990046d4
+Revises: b2c3d4e5f6a7
 Create Date: 2026-05-23
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision: str = 'fb020c36edce'
-down_revision: Union[str, None] = '109a990046d4'
+down_revision: Union[str, None] = 'b2c3d4e5f6a7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
