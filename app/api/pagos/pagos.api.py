@@ -24,6 +24,7 @@ _mod_sch  = importlib.util.module_from_spec(_spec_sch)
 _spec_sch.loader.exec_module(_mod_sch)
 PagoEntrada = _mod_sch.PagoEntrada
 WebhookWompiEntrada = _mod_sch.WebhookWompiEntrada
+ActualizarEstadoPagoEntrada = _mod_sch.ActualizarEstadoPagoEntrada
 
 # Cargar servicio
 _path_svc = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "services", "pagos", "pagos.services.py"))
@@ -33,6 +34,16 @@ _spec_svc.loader.exec_module(_mod_svc)
 PagoService = _mod_svc.PagoService
 
 router = APIRouter(prefix="/pagos", tags=["Pagos"])
+
+
+def _requerir_administrador(usuario_actual):
+    if usuario_actual.rol != "administrador":
+        raise HTTPException(status_code=403, detail={
+            "success": False, "statusCode": 403,
+            "message": "Acceso denegado",
+            "error": {"error_code": "FORBIDDEN",
+                      "details": "Solo un administrador puede acceder a este recurso."}
+        })
 
 
 @router.post("", status_code=201)
@@ -60,19 +71,35 @@ def procesar_webhook_wompi(
     return servicio.procesar_webhook(body.model_dump())
 
 
+@router.get("")
+def listar_pagos(
+    db: Session = Depends(get_db),
+    usuario_actual = Depends(get_usuario_actual)
+):
+    _requerir_administrador(usuario_actual)
+    servicio = PagoService(db)
+    return servicio.listar_pagos()
+
+
+@router.patch("/{pago_id}")
+def actualizar_estado_pago(
+    pago_id: UUID,
+    body: ActualizarEstadoPagoEntrada,
+    db: Session = Depends(get_db),
+    usuario_actual = Depends(get_usuario_actual)
+):
+    _requerir_administrador(usuario_actual)
+    servicio = PagoService(db)
+    return servicio.actualizar_estado_manual(pago_id, body.estadoTransaccion)
+
+
 @router.get("/referencia/{referencia}")
 def consultar_pago_por_referencia(
     referencia: str,
     db: Session = Depends(get_db),
     usuario_actual = Depends(get_usuario_actual)
 ):
-    if usuario_actual.rol != "administrador":
-        raise HTTPException(status_code=403, detail={
-            "success": False, "statusCode": 403,
-            "message": "Acceso denegado",
-            "error": {"error_code": "FORBIDDEN",
-                      "details": "Solo un administrador puede acceder a este recurso."}
-        })
+    _requerir_administrador(usuario_actual)
     servicio = PagoService(db)
     return servicio.consultar_por_referencia(referencia)
 

@@ -34,3 +34,10 @@ class PagoRepositorio:
         self.db.commit()
         self.db.refresh(pago)
         return pago
+
+    def actualizar_estado_manual(self, pago: Pago, estado_transaccion: str) -> Pago:
+        pago.estado_transaccion = estado_transaccion
+        pago.fecha_actualizacion = datetime.now(timezone.utc)
+        self.db.commit()
+        self.db.refresh(pago)
+        return pago
