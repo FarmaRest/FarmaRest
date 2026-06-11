@@ -4,6 +4,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 from app.domain.envios import Envio
 
 
@@ -25,3 +26,10 @@ class EnvioRepositorio:
 
     def listar_todos(self) -> list[Envio]:
         return self.db.query(Envio).all()
+
+    def actualizar_estado(self, envio: Envio, nuevo_estado: str) -> Envio:
+        envio.estado = nuevo_estado
+        envio.fecha_actualizacion = datetime.now(timezone.utc)
+        self.db.flush()
+        self.db.refresh(envio)
+        return envio

@@ -21,6 +21,10 @@ class EnvioEntrada(BaseModel):
     fechaDespacho:     date
 
 
+class ActualizarEstadoEnvioEntrada(BaseModel):
+    estado: str
+
+
 class EnvioSalida(BaseModel):
     id:                  UUID4
     pedido_id:           UUID4

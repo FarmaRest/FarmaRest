@@ -41,6 +41,9 @@ TARIFAS_ENVIO_POR_CIUDAD = {
 }
 TARIFA_ENVIO_DEFECTO = 15000
 
+# Flujo secuencial y unidireccional de estados del envío.
+FLUJO_ESTADOS_ENVIO = ("en_preparacion", "despachado", "en_transito", "entregado")
+
 
 class EnvioService:
     def __init__(self, db: Session):
@@ -167,6 +170,66 @@ class EnvioService:
                           "details": "No tiene permisos para consultar este envío.",
                           "timestamp": ahora.isoformat()}
             })
+
+    def actualizar_estado_envio(self, envio_id, nuevo_estado: str) -> dict:
+        ahora = datetime.now(timezone.utc)
+
+        envio = self.envio_repo.buscar_por_id(envio_id)
+        if not envio:
+            raise HTTPException(status_code=404, detail={
+                "success": False, "statusCode": 404,
+                "message": "Envío no encontrado",
+                "error": {"error_code": "SHIPMENT_NOT_FOUND",
+                          "details": "No existe un envío con el ID proporcionado.",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        if nuevo_estado not in FLUJO_ESTADOS_ENVIO:
+            raise HTTPException(status_code=400, detail={
+                "success": False, "statusCode": 400,
+                "message": "El estado proporcionado no es válido",
+                "error": {"error_code": "INVALID_SHIPMENT_STATUS",
+                          "details": f"Los estados válidos son: {', '.join(FLUJO_ESTADOS_ENVIO)}",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        indice_actual = FLUJO_ESTADOS_ENVIO.index(envio.estado)
+        indice_nuevo  = FLUJO_ESTADOS_ENVIO.index(nuevo_estado)
+
+        if indice_nuevo != indice_actual + 1:
+            if indice_actual == len(FLUJO_ESTADOS_ENVIO) - 1:
+                detalle = f"El envío está en estado '{envio.estado}'. No existe un siguiente estado válido."
+            else:
+                siguiente = FLUJO_ESTADOS_ENVIO[indice_actual + 1]
+                detalle = f"El envío está en estado '{envio.estado}'. El único siguiente estado válido es '{siguiente}'."
+            raise HTTPException(status_code=409, detail={
+                "success": False, "statusCode": 409,
+                "message": "Transición de estado no permitida",
+                "error": {"error_code": "INVALID_STATE_TRANSITION",
+                          "details": detalle,
+                          "timestamp": ahora.isoformat()}
+            })
+
+        envio = self.envio_repo.actualizar_estado(envio, nuevo_estado)
+
+        if nuevo_estado == "entregado":
+            pedido = self.pedido_repo.buscar_por_id(envio.pedido_id)
+            pedido.estado = "entregado"
+            pedido.fecha_actualizacion = ahora
+
+        self.db.commit()
+        self.db.refresh(envio)
+
+        return {
+            "success": True,
+            "statusCode": 200,
+            "message": "Estado del envío actualizado correctamente",
+            "data": {
+                "envioId": str(envio.id),
+                "estado": envio.estado,
+                "fechaActualizacion": envio.fecha_actualizacion.isoformat(),
+            }
+        }
 
     def _serializar_envio(self, envio: Envio, mensaje: str, status_code: int) -> dict:
         return {

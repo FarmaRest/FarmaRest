@@ -23,6 +23,7 @@ _spec_sch = importlib.util.spec_from_file_location("envios_schemas", _path_sch)
 _mod_sch  = importlib.util.module_from_spec(_spec_sch)
 _spec_sch.loader.exec_module(_mod_sch)
 EnvioEntrada = _mod_sch.EnvioEntrada
+ActualizarEstadoEnvioEntrada = _mod_sch.ActualizarEstadoEnvioEntrada
 
 # Cargar servicio
 _path_svc = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "services", "envios", "envios.services.py"))
@@ -90,3 +91,15 @@ def consultar_envio_por_id(
 ):
     servicio = EnvioService(db)
     return servicio.consultar_por_id(envio_id, usuario_actual.id, usuario_actual.rol)
+
+
+@router.patch("/{envio_id}")
+def actualizar_estado_envio(
+    envio_id: UUID,
+    body: ActualizarEstadoEnvioEntrada,
+    db: Session = Depends(get_db),
+    usuario_actual = Depends(get_usuario_actual)
+):
+    _requerir_administrador(usuario_actual)
+    servicio = EnvioService(db)
+    return servicio.actualizar_estado_envio(envio_id, body.estado)
