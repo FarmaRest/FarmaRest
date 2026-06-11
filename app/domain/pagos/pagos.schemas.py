@@ -36,6 +36,10 @@ class WebhookWompiEntrada(BaseModel):
     signature: WompiSignature
 
 
+class ActualizarEstadoPagoEntrada(BaseModel):
+    estadoTransaccion: str
+
+
 class PagoSalida(BaseModel):
     id:                   UUID4
     pedido_id:            UUID4

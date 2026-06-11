@@ -43,6 +43,8 @@ ZONA_COLOMBIA         = ZoneInfo("America/Bogota")
 
 WOMPI_EVENTS_SECRET   = os.getenv("WOMPI_EVENTS_SECRET", "")
 
+ESTADOS_TRANSACCION_VALIDOS = ("PENDING", "APPROVED", "DECLINED", "VOIDED", "ERROR")
+
 
 class PagoService:
     def __init__(self, db: Session):
@@ -179,6 +181,62 @@ class PagoService:
             })
 
         return self._serializar_pago(pago, "Pago encontrado")
+
+    def listar_pagos(self) -> dict:
+        pagos = self.pago_repo.listar_todos()
+        return {
+            "success": True,
+            "statusCode": 200,
+            "message": "Pagos obtenidos correctamente",
+            "data": [
+                {
+                    "pagoId": str(pago.id),
+                    "pedidoId": str(pago.pedido_id),
+                    "referenciaInterna": pago.referencia_interna,
+                    "idTransaccionWompi": pago.id_transaccion_wompi,
+                    "montoEnCentavos": pago.monto_en_centavos,
+                    "moneda": pago.moneda,
+                    "estadoTransaccion": pago.estado_transaccion,
+                    "fechaPago": pago.fecha_actualizacion.isoformat(),
+                }
+                for pago in pagos
+            ]
+        }
+
+    def actualizar_estado_manual(self, pago_id, nuevo_estado: str) -> dict:
+        ahora = datetime.now(timezone.utc)
+
+        pago = self.pago_repo.buscar_por_id(pago_id)
+        if not pago:
+            raise HTTPException(status_code=404, detail={
+                "success": False, "statusCode": 404,
+                "message": "Pago no encontrado",
+                "error": {"error_code": "PAYMENT_NOT_FOUND",
+                          "details": "No existe un pago con el ID proporcionado.",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        if nuevo_estado not in ESTADOS_TRANSACCION_VALIDOS:
+            raise HTTPException(status_code=400, detail={
+                "success": False, "statusCode": 400,
+                "message": "El estado de transacción proporcionado no es válido",
+                "error": {"error_code": "INVALID_TRANSACTION_STATUS",
+                          "details": f"Los estados válidos son: {', '.join(ESTADOS_TRANSACCION_VALIDOS)}.",
+                          "timestamp": ahora.isoformat()}
+            })
+
+        pago = self.pago_repo.actualizar_estado_manual(pago, nuevo_estado)
+
+        return {
+            "success": True,
+            "statusCode": 200,
+            "message": "Estado del pago actualizado correctamente",
+            "data": {
+                "pagoId": str(pago.id),
+                "estadoTransaccion": pago.estado_transaccion,
+                "fechaActualizacion": pago.fecha_actualizacion.isoformat(),
+            }
+        }
 
     def _generar_factura(self, pago_id) -> None:
         try:
