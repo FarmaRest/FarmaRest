@@ -3,7 +3,9 @@ from datetime import datetime, timezone, time
 from zoneinfo import ZoneInfo
 from fastapi import HTTPException
 import hashlib
-import importlib.util, os, uuid
+import importlib.util, os, uuid, logging
+
+logger = logging.getLogger(__name__)
 
 # Cargar repositorio de pagos
 _path_pag = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "repositories", "pagos", "pagos.repositori.py"))
@@ -25,6 +27,13 @@ _spec_wmp = importlib.util.spec_from_file_location("wompi_adapter", _path_wmp)
 _mod_wmp  = importlib.util.module_from_spec(_spec_wmp)
 _spec_wmp.loader.exec_module(_mod_wmp)
 WompiAdapter = _mod_wmp.WompiAdapter
+
+# Cargar servicio de facturas
+_path_fac = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "facturas", "facturas.services.py"))
+_spec_fac = importlib.util.spec_from_file_location("facturas_services", _path_fac)
+_mod_fac  = importlib.util.module_from_spec(_spec_fac)
+_spec_fac.loader.exec_module(_mod_fac)
+FacturaService = _mod_fac.FacturaService
 
 from app.domain.pagos import Pago
 
@@ -171,6 +180,16 @@ class PagoService:
 
         return self._serializar_pago(pago, "Pago encontrado")
 
+    def _generar_factura(self, pago_id) -> None:
+        try:
+            FacturaService(self.db).generar_factura(pago_id, validar_aprobado=False)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                return
+            logger.exception("Fallo al generar la factura para el pago %s", pago_id)
+        except Exception:
+            logger.exception("Fallo al generar la factura para el pago %s", pago_id)
+
     PROPIEDADES_A_CAMPOS = {
         "transaction.id": "id",
         "transaction.status": "status",
@@ -249,6 +268,7 @@ class PagoService:
             pedido = self.pedido_repo.buscar_por_id(pago.pedido_id)
             pedido_actualizado = self.pedido_repo.actualizar_estado(pedido, "pagado")
             estado_pedido_actualizado = pedido_actualizado.estado
+            self._generar_factura(pago.id)
 
         return {
             "success": True,
