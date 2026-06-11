@@ -12,6 +12,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.services.usuarios import UsuarioService, DireccionService
 
 # Prefijo base de todas las rutas de este módulo: /api/v1/usuarios
@@ -448,18 +449,16 @@ def cambiar_correo(usuario_id: str, body: CorreoUpdate, db: Session = Depends(ge
 def consultar_usuario(
     usuario_id: str,
     db: Session = Depends(get_db),
-    solicitante_id: Optional[str] = None,
-    solicitante_rol: Optional[str] = "cliente",
+    usuario_actual=Depends(get_current_user),
 ):
     """
     Retorna el perfil completo del usuario incluyendo sus direcciones.
-    La contraseña nunca aparece en la respuesta.
-    Pendiente: reemplazar solicitante_id y solicitante_rol por JWT en HU de autenticación.
+    Requiere token JWT válido en el header Authorization: Bearer <token>.
+    Un cliente solo puede consultar su propio perfil; un admin puede consultar cualquiera.
     """
     try:
         service = UsuarioService(db)
-        sid = solicitante_id if solicitante_id else usuario_id
-        usuario = service.consultar_por_id(usuario_id, sid, solicitante_rol)
+        usuario = service.consultar_por_id(usuario_id, str(usuario_actual.id), usuario_actual.rol)
         data = {
             "id": str(usuario.id),
             "primer_nombre": usuario.primer_nombre,
