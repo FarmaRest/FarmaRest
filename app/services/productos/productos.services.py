@@ -55,7 +55,7 @@ class ProductoService:
         """
 
         # Regla: solo administradores pueden registrar productos
-        if solicitante_rol != "admin":
+        if solicitante_rol != "administrador":
             raise PermissionError("FORBIDDEN")
 
         # Validación de precio antes de tocar la BD (falla rápido)
@@ -134,7 +134,7 @@ class ProductoService:
         """
 
         # Regla: solo administradores pueden actualizar productos
-        if solicitante_rol != "admin":
+        if solicitante_rol != "administrador":
             raise PermissionError("FORBIDDEN")
 
         producto = self.producto_repo.buscar_por_id(producto_id)
@@ -210,7 +210,7 @@ class ProductoService:
 
     def agregar_lote(self, producto_id: str, datos: dict, solicitante_rol: str):
         """Agrega un nuevo lote a un producto existente y recalcula su stock y activo."""
-        if solicitante_rol != "admin":
+        if solicitante_rol != "administrador":
             raise PermissionError("FORBIDDEN")
 
         producto = self.producto_repo.buscar_por_id(producto_id)
@@ -253,7 +253,7 @@ class ProductoService:
 
     def actualizar_presentacion(self, presentacion_id: str, datos: dict, solicitante_rol: str):
         """Actualiza tipo, cantidad o unidad de una presentación existente."""
-        if solicitante_rol != "admin":
+        if solicitante_rol != "administrador":
             raise PermissionError("FORBIDDEN")
 
         presentacion = self.presentacion_repo.buscar_por_id(presentacion_id)
@@ -317,15 +317,15 @@ class ProductoService:
         # (incluyendo los que acaban de ser modificados vía flush)
         todos_los_lotes = self.lote_repo.listar_por_producto(str(producto.id))
         nuevo_stock = sum(l.cantidad for l in todos_los_lotes)
-        activo = nuevo_stock > 0
 
-        # actualizar() hace el commit final — cierra la transacción completa
-        self.producto_repo.actualizar(producto, {"stock": nuevo_stock, "activo": activo})
+        producto.stock = nuevo_stock
+        producto.activo = nuevo_stock > 0
+        self.db.flush()
 
     def crear_categoria(self, datos: dict, solicitante_rol: str) -> Categoria:
         """Crea una nueva categoría de productos. Solo admin."""
 
-        if solicitante_rol != "admin":
+        if solicitante_rol != "administrador":
             raise PermissionError("FORBIDDEN")
 
         # Validación previa para devolver 409 con mensaje claro en vez del
@@ -339,7 +339,7 @@ class ProductoService:
     def crear_laboratorio(self, datos: dict, solicitante_rol: str) -> Laboratorio:
         """Crea un nuevo laboratorio fabricante. Solo admin."""
 
-        if solicitante_rol != "admin":
+        if solicitante_rol != "administrador":
             raise PermissionError("FORBIDDEN")
 
         # Mismo criterio que categorías: chequeo previo para mensaje claro

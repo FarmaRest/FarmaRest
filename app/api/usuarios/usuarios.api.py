@@ -12,6 +12,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.services.usuarios import UsuarioService, DireccionService
 
 # Prefijo base de todas las rutas de este módulo: /api/v1/usuarios
@@ -128,6 +129,12 @@ def registrar_usuario(body: UsuarioIn, db: Session = Depends(get_db)):
                 detail=_formato_error(409, "Correo ya registrado", "EMAIL_ALREADY_EXISTS",
                                       f"El correo {body.correo} ya está asociado a una cuenta")
             )
+        if "CEDULA_ALREADY_EXISTS" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_formato_error(409, "Cédula ya registrada", "CEDULA_ALREADY_EXISTS",
+                                      f"La cédula {body.cedula} ya está asociada a una cuenta")
+            )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail=_formato_error(400, "Datos inválidos", "VALIDATION_ERROR", str(e)))
 
@@ -139,18 +146,15 @@ def actualizar_usuario(
     usuario_id: str,
     body: UsuarioUpdate,
     db: Session = Depends(get_db),
-    solicitante_id: Optional[str] = None,
-    solicitante_rol: Optional[str] = "cliente",
+    usuario_actual=Depends(get_current_user),
 ):
     """
     Actualiza los datos personales de un usuario.
-    Solo se modifican los campos que vengan en el body.
-    Pendiente: reemplazar solicitante_id y solicitante_rol por JWT en HU de autenticación.
+    Requiere token JWT válido. Un cliente solo puede modificar su propio perfil.
     """
     try:
         service = UsuarioService(db)
-        sid = solicitante_id if solicitante_id else usuario_id
-        usuario = service.actualizar_usuario(usuario_id, body.model_dump(exclude_none=True), sid, solicitante_rol)
+        usuario = service.actualizar_usuario(usuario_id, body.model_dump(exclude_none=True), str(usuario_actual.id), usuario_actual.rol)
         data = {
             "id": str(usuario.id),
             "primer_nombre": usuario.primer_nombre,
@@ -193,17 +197,16 @@ def actualizar_usuario(
 def eliminar_usuario(
     usuario_id: str,
     db: Session = Depends(get_db),
-    solicitante_rol: Optional[str] = "cliente",
+    usuario_actual=Depends(get_current_user),
 ):
     """
     Elimina un usuario. Solo lo puede hacer un administrador.
     No se puede eliminar si tiene pedidos asociados.
     Retorna 204 (sin contenido en el body).
-    Pendiente: reemplazar solicitante_rol por JWT en HU de autenticación.
     """
     try:
         service = UsuarioService(db)
-        service.eliminar_usuario(usuario_id, solicitante_rol)
+        service.eliminar_usuario(usuario_id, usuario_actual.rol)
         return None
     except PermissionError:
         raise HTTPException(
@@ -442,18 +445,16 @@ def cambiar_correo(usuario_id: str, body: CorreoUpdate, db: Session = Depends(ge
 def consultar_usuario(
     usuario_id: str,
     db: Session = Depends(get_db),
-    solicitante_id: Optional[str] = None,
-    solicitante_rol: Optional[str] = "cliente",
+    usuario_actual=Depends(get_current_user),
 ):
     """
     Retorna el perfil completo del usuario incluyendo sus direcciones.
-    La contraseña nunca aparece en la respuesta.
-    Pendiente: reemplazar solicitante_id y solicitante_rol por JWT en HU de autenticación.
+    Requiere token JWT válido en el header Authorization: Bearer <token>.
+    Un cliente solo puede consultar su propio perfil; un admin puede consultar cualquiera.
     """
     try:
         service = UsuarioService(db)
-        sid = solicitante_id if solicitante_id else usuario_id
-        usuario = service.consultar_por_id(usuario_id, sid, solicitante_rol)
+        usuario = service.consultar_por_id(usuario_id, str(usuario_actual.id), usuario_actual.rol)
         data = {
             "id": str(usuario.id),
             "primer_nombre": usuario.primer_nombre,
@@ -491,3 +492,13 @@ def consultar_usuario(
             detail=_formato_error(404, "Usuario no encontrado", "USER_NOT_FOUND",
                                   "No existe un usuario con el ID proporcionado")
         )
+
+
+# ─── Test: disparar inactivación manual ──────────────────────────────────────
+
+@router.post("/admin/ejecutar-inactivacion", status_code=status.HTTP_200_OK)
+def ejecutar_inactivacion_manual(db: Session = Depends(get_db)):
+    from app.services.usuarios import InactivacionService
+    service = InactivacionService(db)
+    total = service.ejecutar()
+    return {"success": True, "message": f"Usuarios inactivados: {total}", "total": total}

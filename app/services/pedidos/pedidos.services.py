@@ -11,6 +11,13 @@ _spec_ped.loader.exec_module(_mod_ped)
 PedidoRepositorio     = _mod_ped.PedidoRepositorio
 ItemPedidoRepositorio = _mod_ped.ItemPedidoRepositorio
 
+# Cargar servicio de productos (para descuento FEFO al confirmar pedido)
+_path_prod = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "productos", "productos.services.py"))
+_spec_prod = importlib.util.spec_from_file_location("productos_services", _path_prod)
+_mod_prod  = importlib.util.module_from_spec(_spec_prod)
+_spec_prod.loader.exec_module(_mod_prod)
+ProductoService = _mod_prod.ProductoService
+
 # Cargar repositorio de carritos
 _path_car = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "repositories", "carritos", "carritos.repositori.py"))
 _spec_car = importlib.util.spec_from_file_location("carritos_repositori", _path_car)
@@ -122,6 +129,26 @@ class PedidoService:
         self.item_pedido_repo.guardar_todos(items_pedido)
 
         self.carrito_repo.desactivar(carrito_id)
+
+        producto_service = ProductoService(self.db)
+        try:
+            for item in items_carrito:
+                producto_service.descontar_stock_fefo(str(item.producto_id), item.cantidad)
+        except ValueError as e:
+            self.db.rollback()
+            partes = str(e).split("|")
+            nombre_producto = partes[2] if len(partes) > 2 else "producto"
+            stock_disponible = partes[1] if len(partes) > 1 else "?"
+            raise HTTPException(status_code=400, detail={
+                "success": False, "statusCode": 400,
+                "message": "No se puede crear el pedido, stock insuficiente",
+                "error": {
+                    "error_code": "INSUFFICIENT_STOCK",
+                    "details": f"El producto '{nombre_producto}' no tiene stock suficiente. Stock disponible: {stock_disponible}.",
+                    "timestamp": ahora.isoformat()
+                }
+            })
+
         self.db.commit()
         self.db.refresh(pedido)
 

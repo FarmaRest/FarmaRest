@@ -32,6 +32,10 @@ class UsuarioService:
         if self.repo.buscar_por_correo(datos["correo"]):
             raise ValueError("EMAIL_ALREADY_EXISTS")
 
+        # Regla de negocio: la cédula debe ser única en todo el sistema
+        if self.repo.buscar_por_cedula(datos["cedula"]):
+            raise ValueError("CEDULA_ALREADY_EXISTS")
+
         # La contraseña nunca se guarda en texto plano — se cifra con bcrypt
         # bcrypt genera un salt aleatorio internamente cada vez, por eso es seguro
         hash_pw = bcrypt.hashpw(datos["contrasena"].encode(), bcrypt.gensalt()).decode()

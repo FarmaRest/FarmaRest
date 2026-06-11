@@ -19,6 +19,9 @@ class UsuarioRepositorio:
     def buscar_por_id(self, usuario_id: str):
         return self.db.query(Usuario).filter(Usuario.id == usuario_id).first()
 
+    def buscar_por_cedula(self, cedula: str):
+        return self.db.query(Usuario).filter(Usuario.cedula == cedula).first()
+
     def guardar(self, usuario: Usuario):
         self.db.add(usuario)
         self.db.commit()
@@ -42,7 +45,8 @@ class UsuarioRepositorio:
         self.db.commit()
 
     def tiene_pedidos(self, usuario_id: str) -> bool:
-        return False
+        from app.domain.pedidos import Pedido
+        return self.db.query(Pedido).filter(Pedido.usuario_id == usuario_id).first() is not None
 
     def actualizar_estado(self, usuario: Usuario, nuevo_estado: str) -> Usuario:
         usuario.estado = nuevo_estado
