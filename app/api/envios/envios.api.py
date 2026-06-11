@@ -5,6 +5,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from uuid import UUID
 import importlib.util, os
 
 from app.core.database import get_db
@@ -39,7 +40,7 @@ def _requerir_administrador(usuario_actual):
             "success": False, "statusCode": 403,
             "message": "Acceso denegado",
             "error": {"error_code": "FORBIDDEN",
-                      "details": "Solo un administrador puede registrar envíos."}
+                      "details": "Solo un administrador puede acceder a este recurso."}
         })
 
 
@@ -59,3 +60,33 @@ def registrar_envio(
         empresa_transporte=body.empresaTransporte,
         fecha_despacho=body.fechaDespacho,
     )
+
+
+@router.get("")
+def listar_envios(
+    db: Session = Depends(get_db),
+    usuario_actual = Depends(get_usuario_actual)
+):
+    _requerir_administrador(usuario_actual)
+    servicio = EnvioService(db)
+    return servicio.listar_envios()
+
+
+@router.get("/pedido/{pedido_id}")
+def consultar_envio_por_pedido(
+    pedido_id: UUID,
+    db: Session = Depends(get_db),
+    usuario_actual = Depends(get_usuario_actual)
+):
+    servicio = EnvioService(db)
+    return servicio.consultar_por_pedido_id(pedido_id, usuario_actual.id, usuario_actual.rol)
+
+
+@router.get("/{envio_id}")
+def consultar_envio_por_id(
+    envio_id: UUID,
+    db: Session = Depends(get_db),
+    usuario_actual = Depends(get_usuario_actual)
+):
+    servicio = EnvioService(db)
+    return servicio.consultar_por_id(envio_id, usuario_actual.id, usuario_actual.rol)
