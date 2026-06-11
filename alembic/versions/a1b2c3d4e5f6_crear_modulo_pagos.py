@@ -1,7 +1,7 @@
 """crear_modulo_pagos
 
 Revision ID: a1b2c3d4e5f6
-Revises: 346ae1b3d9a2
+Revises: d4e5f6a7b8c9
 Create Date: 2026-05-30 10:00:00.000000
 
 """
@@ -26,9 +26,9 @@ def upgrade() -> None:
     sa.Column('referencia_interna', sa.String(length=100), nullable=False),
     sa.Column('id_transaccion_wompi', sa.String(length=100), nullable=True),
     sa.Column('monto_en_centavos', sa.BigInteger(), nullable=False),
-    sa.Column('moneda', sa.String(length=10), nullable=False),
+    sa.Column('moneda', sa.String(length=10), nullable=False, server_default='COP'),
     sa.Column('metodo_pago', sa.String(length=50), nullable=True),
-    sa.Column('estado_transaccion', sa.String(length=20), nullable=False),
+    sa.Column('estado_transaccion', sa.String(length=20), nullable=False, server_default='PENDING'),
     sa.Column('url_checkout', sa.Text(), nullable=True),
     sa.Column('fecha_creacion', sa.DateTime(timezone=True), nullable=False),
     sa.Column('fecha_actualizacion', sa.DateTime(timezone=True), nullable=False),
