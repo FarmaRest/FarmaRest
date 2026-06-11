@@ -62,6 +62,13 @@ class FactusAdapter:
             "numbering_range_id": int(self.NUMBERING_RANGE_ID),
             "operation_type": "10",
             "send_email": False,
+            "payment_details": [
+                {
+                    "payment_form": 1,
+                    "payment_method_code": "10",
+                    "amount": f"{float(pedido.total):.2f}",
+                }
+            ],
             "customer": {
                 "identification_document_code": "13",
                 "identification": usuario.cedula,
