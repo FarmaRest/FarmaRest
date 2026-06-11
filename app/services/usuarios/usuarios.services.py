@@ -115,7 +115,7 @@ class UsuarioService:
         """HU-USR-02: Elimina un usuario del sistema. Solo lo puede hacer un admin."""
 
         # Regla: solo administradores pueden eliminar cuentas
-        if solicitante_rol != "admin":
+        if solicitante_rol != "administrador":
             raise PermissionError("FORBIDDEN")
 
         usuario = self.repo.buscar_por_id(usuario_id)
@@ -132,7 +132,7 @@ class UsuarioService:
     def actualizar_estado(self, usuario_id: str, nuevo_estado: str, solicitante_rol: str) -> Usuario:
         """HU-USR-04: Cambia el estado de un usuario entre activo e inactivo. Solo admin."""
 
-        if solicitante_rol != "admin":
+        if solicitante_rol != "administrador":
             raise PermissionError("FORBIDDEN")
 
         # Solo se aceptan estos dos valores de estado
